@@ -36,7 +36,7 @@ function create_and_plot_graph(gps_points)
     plot = gplot(g, layout=custom_layout)
 
     # Save the plot to a file
-    draw(PNG("graph_plot.png", 16cm, 12cm), plot)
+    draw(PNG("graph_plot_15.png", 16cm, 12cm), plot)
 end
 
 function main()
