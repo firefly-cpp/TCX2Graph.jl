@@ -1,15 +1,16 @@
 using TCXReader, Graphs, GraphPlot, Compose, Cairo, Fontconfig
 
+# Function to read GPS points from a TCX file
 function read_tcx_gps_points(tcx_file_path)
     author, activities = loadTCXFile(tcx_file_path)
     trackpoints = []
 
+    # Extract GPS coordinates from each activity, lap, and trackpoint
     for activity in activities
         for lap in activity.laps
             for trackpoint in lap.trackPoints
                 if !isnothing(trackpoint.latitude) && !isnothing(trackpoint.longitude)
                     push!(trackpoints, (trackpoint.latitude, trackpoint.longitude))
-                    println("Latitude: ", trackpoint.latitude, ", Longitude: ", trackpoint.longitude)
                 end
             end
         end
@@ -18,32 +19,48 @@ function read_tcx_gps_points(tcx_file_path)
     return trackpoints
 end
 
-# Function to create and plot a graph from GPS points
-function create_and_plot_graph(gps_points)
-    g = Graph(length(gps_points))  # Each GPS point is a vertex
+# Function to create and plot a graph from multiple GPS point paths
+function create_and_plot_graph(tcx_files)
+    g = SimpleGraph()  # Use a simple graph to represent all paths
+    all_coordinates = []  # Store all coordinates for custom layout
+    paths = []  # Keep track of which GPS points belong to which path
 
-    # Add edges between consecutive GPS points
-    for i in 1:length(gps_points) - 1
-        add_edge!(g, i, i + 1)
+    for (path_index, tcx_file_path) in enumerate(tcx_files)
+        gps_points = read_tcx_gps_points(tcx_file_path)
+
+        # Add vertices and edges for the current path
+        start_index = nv(g) + 1
+        add_vertices!(g, length(gps_points))
+        for i in 1:length(gps_points) - 1
+            add_edge!(g, start_index + i - 1, start_index + i)
+        end
+
+        # Record coordinates and associate them with the graph vertices
+        append!(all_coordinates, gps_points)
+        push!(paths, start_index:(start_index + length(gps_points) - 1))
     end
 
-    # Custom layout function that maps each vertex index to its GPS coordinate
-    latitudes = [pt[1] for pt in gps_points]
-    longitudes = [pt[2] for pt in gps_points]
-    custom_layout = (g -> (x = longitudes, y = latitudes))
+    # Create a layout function that maps all graph nodes to their coordinates
+    latitudes = [pt[1] for pt in all_coordinates]
+    longitudes = [pt[2] for pt in all_coordinates]
+    custom_layout = g -> (x = longitudes, y = latitudes)
 
-    # Plot the graph using the custom layout
+    # Plot the combined graph
     plot = gplot(g, layout=custom_layout)
-
-    # Save the plot to a file
-    draw(PNG("graph_plot_15.png", 16cm, 12cm), plot)
+    draw(PNG("multi_tcx_graph.png", 16cm, 12cm), plot)
 end
 
+# Main function to specify multiple TCX files
 function main()
-    tcx_file_path = "../example_data/15.tcx"
-    gps_points = read_tcx_gps_points(tcx_file_path)
-
-    create_and_plot_graph(gps_points)
+    tcx_files = [
+        "../example_data/activity_12163012156.tcx",
+        "../example_data/activity_12171312300.tcx",
+        "../example_data/activity_12186252814.tcx",
+        "../example_data/activity_12270580292.tcx",
+        "../example_data/activity_12381259800.tcx"
+    ]  
+    
+    create_and_plot_graph(tcx_files)
 end
 
 main()
