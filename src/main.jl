@@ -1,4 +1,4 @@
-using TCXReader, Graphs, GraphPlot, Compose, Cairo, Fontconfig
+using TCXReader, Graphs, Plots
 
 # Function to read GPS points from a TCX file
 function read_tcx_gps_points(tcx_file_path)
@@ -19,38 +19,57 @@ function read_tcx_gps_points(tcx_file_path)
     return trackpoints
 end
 
-# Function to create and plot a graph from multiple GPS point paths
-function create_and_plot_graph(tcx_files)
-    graph = SimpleGraph()  # Use a simple graph to represent all paths
-    all_coordinates = []  # Store all coordinates for custom layout
-    paths = []  # Keep track of which GPS points belong to which path
+# Create a property graph structure with attributes
+function create_property_graph(tcx_files)
+   
+    graph = SimpleGraph()
+    all_gps_data = Dict{Int, Tuple{Float64, Float64}}()  
+    paths = []
 
-    for (path_index, tcx_file_path) in enumerate(tcx_files)
+    for (index, tcx_file_path) in enumerate(tcx_files)
         gps_points = read_tcx_gps_points(tcx_file_path)
 
-        # Add vertices and edges for the current path
         start_index = nv(graph) + 1
         add_vertices!(graph, length(gps_points))
         for i in 1:length(gps_points) - 1
             add_edge!(graph, start_index + i - 1, start_index + i)
         end
 
-        # Record coordinates and associate them with the graph vertices
-        append!(all_coordinates, gps_points)
+        for (i, gps) in enumerate(gps_points)
+            vertex_index = start_index + i - 1
+            all_gps_data[vertex_index] = gps  
+        end
+
         push!(paths, start_index:(start_index + length(gps_points) - 1))
     end
 
-    # Create a layout function that maps all graph nodes to their coordinates
-    latitudes = [pt[1] for pt in all_coordinates]
-    longitudes = [pt[2] for pt in all_coordinates]
-    custom_layout = graph -> (x = longitudes, y = latitudes)
-
-    # Plot the combined graph
-    plot = gplot(graph, layout=custom_layout)
-    draw(PNG("multi_tcx_graph.png", 16cm, 12cm), plot)
+    return graph, all_gps_data, paths
 end
 
-# Main function to specify multiple TCX files
+# Function to visualize the graph with Plots
+function plot_property_graph(graph, gps_data, paths)
+    colors = [:red, :blue, :green, :orange, :purple, :cyan]
+    p = plot(title="Multiple TCX Paths (Property Graph)", xlabel="Longitude", ylabel="Latitude")
+
+    # Group paths and plot them separately
+    path_index = 1
+    for path in paths
+        color = colors[(path_index - 1) % length(colors) + 1]
+        longs, lats = [], []
+
+        for vertex in path
+            coord = gps_data[vertex]
+            push!(longs, coord[2])
+            push!(lats, coord[1])
+        end
+
+        plot!(p, longs, lats, color=color, label="Path $path_index", lw=2)
+        path_index += 1
+    end
+
+    savefig(p, "multi_tcx_graph_property.png")
+end
+
 function main()
     tcx_files = [
         "../example_data/activity_12163012156.tcx",
@@ -58,9 +77,13 @@ function main()
         "../example_data/activity_12186252814.tcx",
         "../example_data/activity_12270580292.tcx",
         "../example_data/activity_12381259800.tcx"
-    ]  
-    
-    create_and_plot_graph(tcx_files)
+    ]
+
+    # Create the property graph
+    graph, gps_data, paths = create_property_graph(tcx_files)
+
+    # Visualize the graph
+    plot_property_graph(graph, gps_data, paths)
 end
 
 main()
