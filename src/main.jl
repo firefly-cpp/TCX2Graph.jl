@@ -21,7 +21,7 @@ end
 
 # Function to create and plot a graph from multiple GPS point paths
 function create_and_plot_graph(tcx_files)
-    g = SimpleGraph()  # Use a simple graph to represent all paths
+    graph = SimpleGraph()  # Use a simple graph to represent all paths
     all_coordinates = []  # Store all coordinates for custom layout
     paths = []  # Keep track of which GPS points belong to which path
 
@@ -29,10 +29,10 @@ function create_and_plot_graph(tcx_files)
         gps_points = read_tcx_gps_points(tcx_file_path)
 
         # Add vertices and edges for the current path
-        start_index = nv(g) + 1
-        add_vertices!(g, length(gps_points))
+        start_index = nv(graph) + 1
+        add_vertices!(graph, length(gps_points))
         for i in 1:length(gps_points) - 1
-            add_edge!(g, start_index + i - 1, start_index + i)
+            add_edge!(graph, start_index + i - 1, start_index + i)
         end
 
         # Record coordinates and associate them with the graph vertices
@@ -43,10 +43,10 @@ function create_and_plot_graph(tcx_files)
     # Create a layout function that maps all graph nodes to their coordinates
     latitudes = [pt[1] for pt in all_coordinates]
     longitudes = [pt[2] for pt in all_coordinates]
-    custom_layout = g -> (x = longitudes, y = latitudes)
+    custom_layout = graph -> (x = longitudes, y = latitudes)
 
     # Plot the combined graph
-    plot = gplot(g, layout=custom_layout)
+    plot = gplot(graph, layout=custom_layout)
     draw(PNG("multi_tcx_graph.png", 16cm, 12cm), plot)
 end
 
