@@ -1,16 +1,44 @@
-using TCXReader, Graphs, Plots
+using TCXReader, Graphs, Plots, Statistics
 
-# Function to read GPS points from a TCX file
+# Function to read GPS points and additional properties from a TCX file
 function read_tcx_gps_points(tcx_file_path)
     author, activities = loadTCXFile(tcx_file_path)
     trackpoints = []
 
-    # Extract GPS coordinates from each activity, lap, and trackpoint
+    # Extract GPS coordinates and additional properties from each activity, lap, and trackpoint
     for activity in activities
         for lap in activity.laps
             for trackpoint in lap.trackPoints
                 if !isnothing(trackpoint.latitude) && !isnothing(trackpoint.longitude)
-                    push!(trackpoints, (trackpoint.latitude, trackpoint.longitude))
+                    properties = Dict(
+                        "latitude" => trackpoint.latitude,
+                        "longitude" => trackpoint.longitude,
+                        "time" => trackpoint.time
+                    )
+
+                    # Add optional properties if they exist
+                    if !isnothing(trackpoint.altitude_meters)
+                        properties["altitude"] = trackpoint.altitude_meters
+                    else
+                        properties["altitude"] = missing
+                    end
+                    if !isnothing(trackpoint.distance_meters)
+                        properties["distance"] = trackpoint.distance_meters
+                    else
+                        properties["distance"] = missing
+                    end
+                    if !isnothing(trackpoint.heart_rate_bpm)
+                        properties["heart_rate"] = trackpoint.heart_rate_bpm
+                    else
+                        properties["heart_rate"] = missing
+                    end
+                    if !isnothing(trackpoint.speed)
+                        properties["speed"] = trackpoint.speed
+                    else
+                        properties["speed"] = missing
+                    end
+
+                    push!(trackpoints, properties)
                 end
             end
         end
@@ -21,9 +49,8 @@ end
 
 # Create a property graph structure with attributes
 function create_property_graph(tcx_files)
-   
     graph = SimpleGraph()
-    all_gps_data = Dict{Int, Tuple{Float64, Float64}}()  
+    all_gps_data = Dict{Int, Dict{String, Any}}()  # Stores properties for each vertex
     paths = []
 
     for (index, tcx_file_path) in enumerate(tcx_files)
@@ -37,13 +64,52 @@ function create_property_graph(tcx_files)
 
         for (i, gps) in enumerate(gps_points)
             vertex_index = start_index + i - 1
-            all_gps_data[vertex_index] = gps  
+            all_gps_data[vertex_index] = gps  # Store all properties
         end
 
         push!(paths, start_index:(start_index + length(gps_points) - 1))
     end
 
     return graph, all_gps_data, paths
+end
+
+function find_overlapping_points(gps_data)
+    point_counts = Dict{Tuple{Float64, Float64}, Int}()
+    for (_, properties) in gps_data
+        coord = (properties["latitude"], properties["longitude"])
+        if haskey(point_counts, coord)
+            point_counts[coord] += 1
+        else
+            point_counts[coord] = 1
+        end
+    end
+
+    overlapping_points = filter(x -> x[2] > 1, point_counts)
+    return keys(overlapping_points)
+end
+
+function extract_features(gps_data, overlapping_points)
+    features = []
+
+    for coord in overlapping_points
+        points = filter(x -> gps_data[x]["latitude"] == coord[1] && gps_data[x]["longitude"] == coord[2], keys(gps_data))
+
+        avg_speed = mean([gps_data[p]["speed"] for p in points if gps_data[p]["speed"] !== missing])
+        avg_heart_rate = mean([gps_data[p]["heart_rate"] for p in points if gps_data[p]["heart_rate"] !== missing])
+        avg_altitude = mean([gps_data[p]["altitude"] for p in points if gps_data[p]["altitude"] !== missing])
+        avg_distance = mean([gps_data[p]["distance"] for p in points if gps_data[p]["distance"] !== missing])
+
+        push!(features, Dict(
+            "latitude" => coord[1],
+            "longitude" => coord[2],
+            "avg_speed" => avg_speed,
+            "avg_heart_rate" => avg_heart_rate,
+            "avg_altitude" => avg_altitude,
+            "avg_distance" => avg_distance
+        ))
+    end
+
+    return features
 end
 
 # Function to visualize the graph with Plots
@@ -59,8 +125,8 @@ function plot_property_graph(graph, gps_data, paths)
 
         for vertex in path
             coord = gps_data[vertex]
-            push!(longs, coord[2])
-            push!(lats, coord[1])
+            push!(longs, coord["longitude"])
+            push!(lats, coord["latitude"])
         end
 
         plot!(p, longs, lats, color=color, label="Path $path_index", lw=2)
@@ -81,6 +147,16 @@ function main()
 
     # Create the property graph
     graph, gps_data, paths = create_property_graph(tcx_files)
+
+    # Find overlapping points
+    overlapping_points = find_overlapping_points(gps_data)
+
+    println("Overlapping points: ", length(overlapping_points))
+
+    # Extract features
+    features = extract_features(gps_data, overlapping_points)
+
+    println("Features: ", features)
 
     # Visualize the graph
     plot_property_graph(graph, gps_data, paths)
