@@ -73,10 +73,17 @@ function create_property_graph(tcx_files)
     return graph, all_gps_data, paths
 end
 
+# Define round_coord function
+function round_coord(coord:: Float64, decimals::Int)
+    factor = 10.0^decimals
+    return round(coord * factor) / factor
+end
+
+# Find overlapping points with reduced precision
 function find_overlapping_points(gps_data)
     point_counts = Dict{Tuple{Float64, Float64}, Int}()
     for (_, properties) in gps_data
-        coord = (properties["latitude"], properties["longitude"])
+        coord = (round_coord(properties["latitude"], 6), round_coord(properties["longitude"], 6))
         if haskey(point_counts, coord)
             point_counts[coord] += 1
         else
@@ -92,7 +99,7 @@ function extract_features(gps_data, overlapping_points)
     features = []
 
     for coord in overlapping_points
-        points = filter(x -> gps_data[x]["latitude"] == coord[1] && gps_data[x]["longitude"] == coord[2], keys(gps_data))
+        points = filter(x -> round_coord(gps_data[x]["latitude"], 6) == coord[1] && round_coord(gps_data[x]["longitude"], 6) == coord[2], keys(gps_data))
 
         avg_speed = mean([gps_data[p]["speed"] for p in points if gps_data[p]["speed"] !== missing])
         avg_heart_rate = mean([gps_data[p]["heart_rate"] for p in points if gps_data[p]["heart_rate"] !== missing])
