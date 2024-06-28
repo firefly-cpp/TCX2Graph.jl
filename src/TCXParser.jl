@@ -1,5 +1,19 @@
+# TCXParser.jl
+# This file provides functions to parse TCX files and extract GPS points along with their properties.
+
 using TCXReader
 
+"""
+    read_tcx_gps_points(tcx_file_path::String) -> Vector{Dict{String, Any}}
+
+Read GPS points from a TCX file and extract additional properties such as time, altitude, distance, heart rate, and speed.
+
+# Arguments
+- `tcx_file_path::String`: The file path to the TCX file.
+
+# Returns
+- `Vector{Dict{String, Any}}`: A vector of dictionaries, each containing properties of a GPS trackpoint.
+"""
 function read_tcx_gps_points(tcx_file_path::String)
     author, activities = TCXReader.loadTCXFile(tcx_file_path)
     trackpoints = []

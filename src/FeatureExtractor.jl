@@ -1,5 +1,21 @@
+# FeatureExtractor.jl
+# This file provides functions to find overlapping GPS points and extract features
+# from GPS data.
+
 using Statistics
 
+"""
+    find_overlapping_points(gps_data::Dict{Int, Dict{String, Any}}) -> Keys{Dict{Tuple{Float64, Float64}, Int}}
+
+Find GPS points that overlap (i.e., have the same coordinates up to a precision of 5 decimal places)
+and return their coordinates.
+
+# Arguments
+- `gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing GPS data where the key is an integer identifier and the value is a dictionary of properties.
+
+# Returns
+- A set of tuples containing the coordinates of overlapping points.
+"""
 function find_overlapping_points(gps_data::Dict{Int, Dict{String, Any}})
     point_counts = Dict{Tuple{Float64, Float64}, Int}()
     for (_, properties) in gps_data
@@ -15,6 +31,18 @@ function find_overlapping_points(gps_data::Dict{Int, Dict{String, Any}})
     return keys(overlapping_points)
 end
 
+"""
+    extract_features(gps_data::Dict{Int, Dict{String, Any}}, overlapping_points::Base.KeySet{Tuple{Float64, Float64}, Dict{Tuple{Float64, Float64}, Int}}) -> Vector{Dict{String, Any}}
+
+Extract features such as average speed, heart rate, altitude, and distance for the overlapping GPS points.
+
+# Arguments
+- `gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing GPS data where the key is an integer identifier and the value is a dictionary of properties.
+- `overlapping_points::Base.KeySet{Tuple{Float64, Float64}, Dict{Tuple{Float64, Float64}, Int}}`: A set of tuples containing the coordinates of overlapping points.
+
+# Returns
+- A vector of dictionaries, each containing the coordinates and average properties (speed, heart rate, altitude, distance) of the overlapping points.
+"""
 function extract_features(gps_data::Dict{Int, Dict{String, Any}}, overlapping_points::Base.KeySet{Tuple{Float64, Float64}, Dict{Tuple{Float64, Float64}, Int}})
     features = []
 

@@ -1,5 +1,18 @@
 using Plots
 
+"""
+    plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vector{UnitRange{Int64}}, save_path::String)
+
+Visualize the property graph and save it as an SVG file.
+
+# Arguments
+- `gps_data::Dict{Int, Dict{String, Any}}`: Dictionary containing GPS data for each vertex.
+- `paths::Vector{UnitRange{Int64}}`: Vector of ranges representing different paths.
+- `save_path::String`: File path to save the resulting SVG image.
+
+# Details
+This function creates a plot of multiple TCX paths with different colors for each path and saves the plot to the specified file path.
+"""
 function plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vector{UnitRange{Int64}}, save_path::String)
     colors = [:red, :blue, :green, :orange, :purple, :cyan]
     p = plot(title="Multiple TCX Paths (Property Graph)",
