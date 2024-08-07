@@ -45,10 +45,20 @@ function read_tcx_gps_points(tcx_file_path::String)
                     else
                         properties["heart_rate"] = missing
                     end
+                    if !isnothing(trackpoint.cadence)
+                        properties["cadence"] = trackpoint.cadence
+                    else
+                        properties["cadence"] = missing
+                    end
                     if !isnothing(trackpoint.speed)
                         properties["speed"] = trackpoint.speed
                     else
                         properties["speed"] = missing
+                    end
+                    if !isnothing(trackpoint.watts)
+                        properties["watts"] = trackpoint.watts
+                    else
+                        properties["watts"] = missing
                     end
 
                     push!(trackpoints, properties)

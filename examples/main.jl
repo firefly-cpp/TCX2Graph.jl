@@ -1,18 +1,31 @@
-using TCX2Graph
+include("../src/TCX2Graph.jl")
+
+function get_absolute_path(relative_path::String)
+    return abspath(joinpath(@__DIR__, relative_path))
+end
 
 function main()
     tcx_files = [
-        "../example_data/activity_12163012156.tcx",
-        "../example_data/activity_12171312300.tcx",
-        "../example_data/activity_12186252814.tcx",
-        "../example_data/activity_12270580292.tcx",
-        "../example_data/activity_12381259800.tcx"
+        get_absolute_path("../example_data/activity_12163012156.tcx"),
+        get_absolute_path("../example_data/activity_12171312300.tcx"),
+        get_absolute_path("../example_data/activity_12186252814.tcx"),
+        get_absolute_path("../example_data/activity_12270580292.tcx"),
+        get_absolute_path("../example_data/activity_12381259800.tcx")
     ]
 
-    save_path = "multi_tcx_graph_property.svg"
+    save_path = get_absolute_path("multi_tcx_graph_property.svg")
+
+    for file in tcx_files
+        println("Checking file: $file")
+        if !isfile(file)
+            error("File not found: $file")
+        end
+    end
 
     # Create the property graph
     graph, gps_data, paths = TCX2Graph.create_property_graph(tcx_files)
+
+    println("all gps data: ", gps_data)
 
     # Find overlapping points
     overlapping_points = TCX2Graph.find_overlapping_points(gps_data)
