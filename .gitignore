@@ -28,3 +28,6 @@ Manifest.toml
 
 # Other
 .DS_Store
+
+#IntelliJ
+.idea/
