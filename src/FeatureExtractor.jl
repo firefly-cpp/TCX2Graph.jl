@@ -1,50 +1,90 @@
 # FeatureExtractor.jl
 # This file provides functions to extract and prepare raw features from GPS data,
-# focusing on overlapping segments identified via KD-tree, and ready them for NiaARM.
+# focusing on overlapping segments identified via KD-tree, and ready them for ARM.
+using Statistics
 
 """
-    extract_segment_data_for_arm(gps_data::Dict{Int, Dict{String, Any}}, overlapping_segments::Vector{Tuple{Int, Int}}, paths::Vector{UnitRange{Int64}}) -> Vector{Vector{Dict{String, Any}}}
+    extract_segment_data_for_arm(gps_data::Dict{Int, Dict{String, Any}},
+                                 overlapping_segments::Vector{Tuple{Int, Int}},
+                                 paths::Vector{UnitRange{Int}}) -> Vector{Vector{Dict{String, Any}}}
 
 Extract raw data from overlapping GPS segments across multiple TCX files and prepare it for ARM.
 
 # Arguments
 - `gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing GPS data where the key is an integer identifier and the value is a dictionary of properties.
 - `overlapping_segments::Vector{Tuple{Int, Int}}`: A vector of tuples, each representing an overlapping segment between two paths.
-- `paths::Vector{UnitRange{Int64}}`: A vector of ranges representing the indices of vertices for each TCX file.
+- `paths::Vector{UnitRange{Int}}`: A vector of ranges representing the indices of vertices for each TCX file.
 
 # Returns
-- A vector of transactions, where each transaction is a vector of dictionaries containing raw features for each overlapping segment, across all TCX files.
+- A vector where each element corresponds to an overlapping segment and contains a list of transactions (dictionaries) from different TCX files.
 """
-function extract_segment_data_for_arm(gps_data::Dict{Int, Dict{String, Any}}, overlapping_segments::Vector{Tuple{Int, Int}}, paths::Vector{UnitRange{Int64}})
+function extract_segment_data_for_arm(
+    gps_data::Dict{Int, Dict{String, Any}},
+    overlapping_segments::Vector{Tuple{Int, Int}},
+    paths::Vector{UnitRange{Int}}
+) :: Vector{Vector{Dict{String, Any}}}
+
     transactions_per_segment = []
 
-    for (idx1, idx2) in overlapping_segments
+    for (start_idx, end_idx) in overlapping_segments
         segment_transactions = []
 
-        for path in paths
-            segment_points = [p for p in path if idx1 <= p <= idx2]
-            if isempty(segment_points)
-                continue  # No overlapping points in this path for this segment
-            end
+        for (file_idx, path) in enumerate(paths)
+            # Get all points within the overlapping segment for the current path
+            segment_points = [p for p in path if start_idx <= p <= end_idx]
 
-            # Collect raw data from the segment points
-            for p in segment_points
-                point = gps_data[p]
-                transaction = Dict(
-                    "latitude" => point["latitude"],
-                    "longitude" => point["longitude"],
-                    "speed" => point["speed"],
-                    "altitude" => point["altitude"],
-                    "heart_rate" => point["heart_rate"],
-                    "distance" => point["distance"],
-                    "cadence" => point["cadence"],
-                    "watts" => point["watts"]
-                )
+            if !isempty(segment_points)
+                # Create a transaction for this path in this segment
+                transaction = Dict{String, Any}()
+
+                # Collect data for each point in the segment
+                speeds = Float64[]
+                altitudes = Float64[]
+                heart_rates = Float64[]
+                distances = Float64[]
+                cadences = Float64[]
+                watts = Float64[]
+
+                for p in segment_points
+                    point = gps_data[p]
+                    if haskey(point, "speed") && point["speed"] !== missing
+                        push!(speeds, point["speed"])
+                    end
+                    if haskey(point, "altitude") && point["altitude"] !== missing
+                        push!(altitudes, point["altitude"])
+                    end
+                    if haskey(point, "heart_rate") && point["heart_rate"] !== missing
+                        push!(heart_rates, point["heart_rate"])
+                    end
+                    if haskey(point, "distance") && point["distance"] !== missing
+                        push!(distances, point["distance"])
+                    end
+                    if haskey(point, "cadence") && point["cadence"] !== missing
+                        push!(cadences, point["cadence"])
+                    end
+                    if haskey(point, "watts") && point["watts"] !== missing
+                        push!(watts, point["watts"])
+                    end
+                end
+
+                # Aggregate data for the transaction
+                #transaction["file_index"] = file_idx # Add file index for identification TODO do I need this?
+                transaction["start_latitude"] = gps_data[segment_points[1]]["latitude"]
+                transaction["start_longitude"] = gps_data[segment_points[1]]["longitude"]
+                transaction["end_latitude"] = gps_data[segment_points[end]]["latitude"]
+                transaction["end_longitude"] = gps_data[segment_points[end]]["longitude"]
+                transaction["avg_speed"] = isempty(speeds) ? missing : mean(speeds)
+                transaction["avg_altitude"] = isempty(altitudes) ? missing : mean(altitudes)
+                transaction["avg_heart_rate"] = isempty(heart_rates) ? missing : mean(heart_rates)
+                transaction["total_distance"] = isempty(distances) ? missing : sum(distances)
+                transaction["avg_cadence"] = isempty(cadences) ? missing : mean(cadences)
+                transaction["avg_watts"] = isempty(watts) ? missing : mean(watts)
+
                 push!(segment_transactions, transaction)
             end
         end
 
-        # Only consider segments that have data from multiple TCX files
+        # Only add to result if we have transactions from multiple files
         if length(segment_transactions) > 1
             push!(transactions_per_segment, segment_transactions)
         end
