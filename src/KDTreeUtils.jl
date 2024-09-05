@@ -52,7 +52,7 @@ Find overlapping segments between paths using the KD-tree.
 """
 function find_overlapping_segments_kdtree(all_gps_data::Dict{Int, Dict{String, Any}}, paths::Vector{UnitRange{Int64}}, kdtree)
     overlap_segments = []
-
+    #TODO Implement the function to find overlapping segments not just points (currently it finds overlapping points)
     for i in 1:length(paths)-1
         for j in i+1:length(paths)
             path1 = paths[i]
@@ -60,8 +60,8 @@ function find_overlapping_segments_kdtree(all_gps_data::Dict{Int, Dict{String, A
 
             for idx1 in path1
                 gps1 = gps_to_point(all_gps_data[idx1])
-                # Query the KDTree for potential overlaps
-                candidates = inrange(kdtree, gps1, 0.0001)  # Use an appropriate range
+
+                candidates = inrange(kdtree, gps1, 0.0001)  # Use an appropriate range -> 11m
 
                 for idx2 in candidates
                     if idx2 in path2 && is_same_location(all_gps_data[idx1], all_gps_data[idx2])
@@ -72,7 +72,7 @@ function find_overlapping_segments_kdtree(all_gps_data::Dict{Int, Dict{String, A
         end
     end
 
-    return overlap_segments
+    return Vector{Tuple{Int64, Int64}}(overlap_segments)
 end
 
 """
@@ -88,7 +88,7 @@ Check if two GPS points are the same based on their latitude and longitude.
 # Returns
 - `Bool`: `true` if the two points are considered the same, `false` otherwise.
 """
-function is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0001)
+function is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0001) # 11m
     lat1 = gps1["latitude"]
     lon1 = gps1["longitude"]
     lat2 = gps2["latitude"]

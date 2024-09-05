@@ -48,7 +48,7 @@ function main()
 
     overlapping_segments = TCX2Graph.find_overlapping_segments_kdtree(gps_data, paths, kdtree)
 
-    overlapping_segments = Vector{Tuple{Int64, Int64}}(overlapping_segments)
+    #overlapping_segments = Vector{Tuple{Int64, Int64}}(overlapping_segments)
 
     println("Overlapping segments (KD-tree): ", length(overlapping_segments))
 
@@ -62,7 +62,7 @@ function main()
 
         df = DataFrame(segment_transactions)
 
-        df = coalesce.(df, 0)  # change missing values to 0 TODO find better way to handle missing values
+        #df = coalesce.(df, 0)  # change missing values to 0 TODO find better way to handle missing values
 
         result_de = mine(df, de, criterion, seed=1234)
         #println("DE Result for Segment $i: ", result_de)

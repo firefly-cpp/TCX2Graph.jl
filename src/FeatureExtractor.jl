@@ -67,20 +67,34 @@ function extract_segment_data_for_arm(
                     end
                 end
 
-                # Aggregate data for the transaction
-                #transaction["file_index"] = file_idx # Add file index for identification TODO do I need this?
-                transaction["start_latitude"] = gps_data[segment_points[1]]["latitude"]
-                transaction["start_longitude"] = gps_data[segment_points[1]]["longitude"]
-                transaction["end_latitude"] = gps_data[segment_points[end]]["latitude"]
-                transaction["end_longitude"] = gps_data[segment_points[end]]["longitude"]
-                transaction["avg_speed"] = isempty(speeds) ? missing : mean(speeds)
-                transaction["avg_altitude"] = isempty(altitudes) ? missing : mean(altitudes)
-                transaction["avg_heart_rate"] = isempty(heart_rates) ? missing : mean(heart_rates)
-                transaction["total_distance"] = isempty(distances) ? missing : sum(distances)
-                transaction["avg_cadence"] = isempty(cadences) ? missing : mean(cadences)
-                transaction["avg_watts"] = isempty(watts) ? missing : mean(watts)
+                # Aggregate data for the transaction, only including non-empty data
+                if !isempty(speeds)
+                    transaction["avg_speed"] = mean(speeds)
+                end
+                if !isempty(altitudes)
+                    transaction["avg_altitude"] = mean(altitudes)
+                end
+                if !isempty(heart_rates)
+                    transaction["avg_heart_rate"] = mean(heart_rates)
+                end
+                if !isempty(distances)
+                    transaction["total_distance"] = sum(distances)
+                end
+                if !isempty(cadences)
+                    transaction["avg_cadence"] = mean(cadences)
+                end
+                if !isempty(watts)
+                    transaction["avg_watts"] = mean(watts)
+                end
 
-                push!(segment_transactions, transaction)
+                if !isempty(transaction)
+                    transaction["start_latitude"] = gps_data[segment_points[1]]["latitude"]
+                    transaction["start_longitude"] = gps_data[segment_points[1]]["longitude"]
+                    transaction["end_latitude"] = gps_data[segment_points[end]]["latitude"]
+                    transaction["end_longitude"] = gps_data[segment_points[end]]["longitude"]
+
+                    push!(segment_transactions, transaction)
+                end
             end
         end
 
