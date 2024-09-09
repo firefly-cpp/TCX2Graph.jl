@@ -26,6 +26,7 @@ function extract_segment_data_for_arm(
 ) :: Vector{Vector{Dict{String, Any}}}
 
     transactions_per_segment = []
+    tolerance = 0.0001  # 11 meters in degrees of lat/lon
 
     # Iterate through the overlapping segments
     for ((start_idx1, start_idx2), (end_idx1, end_idx2)) in overlapping_segments
@@ -33,47 +34,67 @@ function extract_segment_data_for_arm(
 
         # For each file (path), retrieve the points between the start and end indices
         for (file_idx, path) in enumerate(paths)
-            # Retrieve points for the current path based on start and end indices
             segment_points = []
 
+            # Get points from each path based on the start and end indices
             if file_idx == 1
-                segment_points = [p for p in path if start_idx1 <= p <= end_idx1]
+                for p in path
+                    if start_idx1 <= p <= end_idx1 && is_same_location(gps_data[p], gps_data[start_idx1], tolerance=tolerance)
+                        push!(segment_points, p)
+                    end
+                end
             else
-                segment_points = [p for p in path if start_idx2 <= p <= end_idx2]
+                for p in path
+                    if start_idx2 <= p <= end_idx2 && is_same_location(gps_data[p], gps_data[start_idx2], tolerance=tolerance)
+                        push!(segment_points, p)
+                    end
+                end
             end
 
             if !isempty(segment_points)
-                println("Segment Points Found for File $file_idx: ", length(segment_points))  # Debugging line
-
-                # Collect data for each point in the segment
                 for p in segment_points
                     point = gps_data[p]
                     transaction = Dict{String, Any}()
 
+                    # Collect only non-missing data for each point
+                    if haskey(point, "speed") && point["speed"] !== missing
+                        transaction["speed"] = point["speed"]
+                    end
+                    if haskey(point, "altitude") && point["altitude"] !== missing
+                        transaction["altitude"] = point["altitude"]
+                    end
+                    if haskey(point, "heart_rate") && point["heart_rate"] !== missing
+                        transaction["heart_rate"] = point["heart_rate"]
+                    end
+                    if haskey(point, "distance") && point["distance"] !== missing
+                        transaction["distance"] = point["distance"]
+                    end
+                    # Optional fields like cadence and watts are handled gracefully
+                    if haskey(point, "cadence") && point["cadence"] !== missing
+                        transaction["cadence"] = point["cadence"]
+                    end
+                    if haskey(point, "watts") && point["watts"] !== missing
+                        transaction["watts"] = point["watts"]
+                    end
+
+                    # Add GPS coordinates to each transaction
                     transaction["latitude"] = point["latitude"]
                     transaction["longitude"] = point["longitude"]
-                    transaction["speed"] = haskey(point, "speed") ? point["speed"] : missing
-                    transaction["altitude"] = haskey(point, "altitude") ? point["altitude"] : missing
-                    transaction["heart_rate"] = haskey(point, "heart_rate") ? point["heart_rate"] : missing
-                    transaction["distance"] = haskey(point, "distance") ? point["distance"] : missing
-                    transaction["cadence"] = haskey(point, "cadence") ? point["cadence"] : missing
-                    transaction["watts"] = haskey(point, "watts") ? point["watts"] : missing
 
-                    # Add transaction for each point
-                    push!(segment_transactions, transaction)
+                    # Only push the transaction if it contains at least one valid data point
+                    if length(transaction) > 2  # Latitude and longitude are always included
+                        push!(segment_transactions, transaction)
+                    end
                 end
-            else
-                println("No segment points found for file: $file_idx, overlapping segment: $start_idx1 to $end_idx1 or $start_idx2 to $end_idx2")
             end
         end
 
-        # Only add to result if there are transactions from multiple files
+        # Only include the segment if there are transactions from multiple files
         if length(segment_transactions) > 1
             push!(transactions_per_segment, segment_transactions)
-        else
-            println("No transactions generated for this segment.")
         end
     end
 
     return transactions_per_segment
 end
+

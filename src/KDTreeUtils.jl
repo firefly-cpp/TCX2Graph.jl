@@ -63,20 +63,24 @@ function find_overlapping_segments_kdtree(all_gps_data::Dict{Int, Dict{String, A
 
             for idx1 in path1
                 gps1 = gps_to_point(all_gps_data[idx1])
-                candidates = inrange(kdtree, gps1, 0.0001)  # Searching nearby points within tolerance (11 meters)
+                candidates = inrange(kdtree, gps1, 0.0011)  # 11 meters tolerance
+
                 for idx2 in candidates
-                    if idx2 in path2 && is_same_location(all_gps_data[idx1], all_gps_data[idx2])
+                    if idx2 in path2 && is_same_location(all_gps_data[idx1], all_gps_data[idx2], tolerance=0.0001)
                         if segment_start === nothing
                             segment_start = (idx1, idx2)
                         end
                         segment_end = (idx1, idx2)
-                    elseif segment_start !== nothing && segment_end !== nothing
-                        push!(overlap_segments, (segment_start, segment_end))
-                        segment_start = nothing
-                        segment_end = nothing
+                    else
+                        if segment_start !== nothing && segment_end !== nothing
+                            push!(overlap_segments, (segment_start, segment_end))
+                            segment_start = nothing
+                            segment_end = nothing
+                        end
                     end
                 end
             end
+
             if segment_start !== nothing && segment_end !== nothing
                 push!(overlap_segments, (segment_start, segment_end))
             end
