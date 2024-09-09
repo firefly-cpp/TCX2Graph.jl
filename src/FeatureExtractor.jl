@@ -26,7 +26,6 @@ function extract_segment_data_for_arm(
 ) :: Vector{Vector{Dict{String, Any}}}
 
     transactions_per_segment = []
-    tolerance = 0.0001  # 11 meters in degrees of lat/lon
 
     # Iterate through the overlapping segments
     for ((start_idx1, start_idx2), (end_idx1, end_idx2)) in overlapping_segments
@@ -38,17 +37,9 @@ function extract_segment_data_for_arm(
 
             # Get points from each path based on the start and end indices
             if file_idx == 1
-                for p in path
-                    if start_idx1 <= p <= end_idx1 && is_same_location(gps_data[p], gps_data[start_idx1], tolerance=tolerance)
-                        push!(segment_points, p)
-                    end
-                end
+                segment_points = [p for p in path if start_idx1 <= p <= end_idx1]
             else
-                for p in path
-                    if start_idx2 <= p <= end_idx2 && is_same_location(gps_data[p], gps_data[start_idx2], tolerance=tolerance)
-                        push!(segment_points, p)
-                    end
-                end
+                segment_points = [p for p in path if start_idx2 <= p <= end_idx2]
             end
 
             if !isempty(segment_points)
@@ -97,4 +88,5 @@ function extract_segment_data_for_arm(
 
     return transactions_per_segment
 end
+
 

@@ -52,6 +52,8 @@ function main()
 
     println("Overlapping segments (KD-tree): ", length(overlapping_segments))
 
+    TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./examples/segments_visualizations/")
+
     transactions_per_segment = TCX2Graph.extract_segment_data_for_arm(gps_data, overlapping_segments, paths)
     println("Prepared Transactions per Segment for ARM: ", length(transactions_per_segment))
 
