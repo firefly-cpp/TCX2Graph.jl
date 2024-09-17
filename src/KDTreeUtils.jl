@@ -7,13 +7,13 @@ using StaticArrays
 """
     gps_to_point(gps::Dict{String, Any}) -> SVector{2, Float64}
 
-Convert GPS data into a point for KD-tree insertion.
+Convert GPS data into a point (latitude and longitude) for KD-tree insertion.
 
 # Arguments
-- `gps::Dict{String, Any}`: A dictionary containing the latitude and longitude of a GPS point.
+- `gps::Dict{String, Any}`: A dictionary containing GPS properties, particularly latitude and longitude.
 
 # Returns
-- An `SVector` point representing the GPS coordinate.
+- `SVector{2, Float64}`: A 2D static vector representing the GPS point's longitude and latitude.
 """
 function gps_to_point(gps::Dict{String, Any})
     lat = gps["latitude"]
@@ -24,13 +24,13 @@ end
 """
     create_kdtree_index(all_gps_data::Dict{Int, Dict{String, Any}}) -> KDTree{Float64, 2}
 
-Create a KD-tree index from GPS data for efficient spatial querying.
+Create a KD-tree index from GPS data for efficient spatial queries.
 
 # Arguments
-- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary where the key is a vertex index and the value is a dictionary of GPS properties.
+- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary where the key is the index of the GPS point, and the value is a dictionary of GPS properties.
 
 # Returns
-- `KDTree{Float64, 2}`: A KDTree that indexes the GPS points for efficient spatial querying.
+- `KDTree{Float64, 2}`: A KD-tree that can be used for spatial queries.
 """
 function create_kdtree_index(all_gps_data::Dict{Int, Dict{String, Any}})
     points = [SVector{2, Float64}(gps["longitude"], gps["latitude"]) for gps in values(all_gps_data)]
@@ -38,79 +38,109 @@ function create_kdtree_index(all_gps_data::Dict{Int, Dict{String, Any}})
 end
 
 """
-    find_overlapping_segments_kdtree(all_gps_data::Dict{Int, Dict{String, Any}}, paths::Vector{UnitRange{Int64}}, kdtree::KDTree{Float64, 2}) -> Vector{Tuple{Int, Int}}
+    find_overlapping_segments_across_paths(all_gps_data::Dict{Int, Dict{String, Any}},
+                                           paths::Vector{UnitRange{Int64}},
+                                           kdtree::KDTree{Float64, 2};
+                                           max_gap::Float64=0.0015,
+                                           min_segment_length::Int=3,
+                                           segment_gap_tolerance::Int=5)
+                                           -> Vector{Dict{String, Any}}
 
-Find overlapping segments between paths using the KD-tree.
+Find overlapping GPS segments across multiple paths using a KD-tree and associate them with the paths in which they appear.
 
 # Arguments
-- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary of GPS data with properties.
-- `paths::Vector{UnitRange{Int64}}`: A vector of ranges representing the indices of vertices for each TCX file.
-- `kdtree::KDTree{Float64, 2}`: The KDTree index for efficient spatial querying.
+- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing GPS data with properties for each GPS point.
+- `paths::Vector{UnitRange{Int64}}`: A vector representing ranges of GPS indices for each path (TCX file).
+- `kdtree::KDTree{Float64, 2}`: A KD-tree for efficient spatial querying of GPS data.
+- `max_gap::Float64`: Maximum allowed distance (in degrees) between consecutive points in an overlapping segment.
+- `min_segment_length::Int`: Minimum number of points required to consider an overlapping segment valid.
+- `segment_gap_tolerance::Int`: Maximum consecutive non-overlapping points allowed before a segment is ended.
 
 # Returns
-- `Vector{Tuple{Int, Int}}`: A vector of tuples, each representing an overlapping segment between two paths.
+- `Vector{Dict{String, Any}}`: A vector of dictionaries where each dictionary represents an overlapping segment, including the start and end points and the paths it is found in.
 """
-function find_overlapping_segments_kdtree(
+function find_overlapping_segments_across_paths(
     all_gps_data::Dict{Int, Dict{String, Any}},
     paths::Vector{UnitRange{Int64}},
     kdtree;
-    max_gap::Float64=0.0015,  # Increased tolerance for KDTree overlap
+    max_gap::Float64=0.0015,
     min_segment_length::Int=3,
-    segment_gap_tolerance::Int=5  # Allow more gaps before ending a segment
-) :: Vector{Tuple{Tuple{Int, Int}, Tuple{Int, Int}}}
-
+    segment_gap_tolerance::Int=5
+) :: Vector{Dict{String, Any}}
+    # This will store segments with their associated paths
     overlap_segments = []
 
-    for i in 1:length(paths)-1
-        for j in i+1:length(paths)
-            path1 = paths[i]
-            path2 = paths[j]
+    # A mapping from segment identifiers to the paths they appear in
+    segment_map = Dict{Tuple{Int, Int}, Set{Int}}()
 
-            segment_start = nothing
-            current_segment = []
-            gap_count = 0
+    # Iterate over all paths
+    for (path_idx, path) in enumerate(paths)
+        segment_start = nothing
+        current_segment = []
+        gap_count = 0
+        overlapping_paths = Set{Int}()  # Initialize here for each new segment
 
-            for idx1 in path1
-                gps1 = gps_to_point(all_gps_data[idx1])
-                candidates = inrange(kdtree, gps1, max_gap)
+        for idx in path
+            gps1 = gps_to_point(all_gps_data[idx])
+            candidates = inrange(kdtree, gps1, max_gap)
 
-                found_overlap = false
+            found_overlap = false
 
-                for idx2 in candidates
-                    if idx2 in path2
-                        if is_same_location(all_gps_data[idx1], all_gps_data[idx2]; tolerance=max_gap * 20)  # Increase tolerance
+            # Check for overlaps in other paths
+            for candidate_idx in candidates
+                # Skip if candidate is in the same path
+                if candidate_idx in path
+                    continue
+                end
+
+                # Check if the candidate point is in a different path
+                for (other_path_idx, other_path) in enumerate(paths)
+                    if candidate_idx in other_path && other_path_idx != path_idx
+                        if is_same_location(all_gps_data[idx], all_gps_data[candidate_idx]; tolerance=max_gap * 20)
                             found_overlap = true
-                            gap_count = 0  # Reset gap counter when overlap found
+                            gap_count = 0
+                            overlapping_paths = union(overlapping_paths, Set([path_idx, other_path_idx]))
 
                             if segment_start === nothing
-                                segment_start = (idx1, idx2)
+                                segment_start = idx
                             end
 
-                            push!(current_segment, (idx1, idx2))
-                        end
-                    end
-                end
+                            push!(current_segment, idx)
 
-                # If no overlap was found, increase gap counter
-                if !found_overlap
-                    gap_count += 1
-
-                    # If the gap tolerance is exceeded, end the segment
-                    if gap_count > segment_gap_tolerance
-                        if length(current_segment) >= min_segment_length
-                            push!(overlap_segments, (segment_start, current_segment[end]))
+                            # Update the segment_map
+                            segment_key = (segment_start, idx)
+                            if haskey(segment_map, segment_key)
+                                push!(segment_map[segment_key], path_idx)
+                            else
+                                segment_map[segment_key] = overlapping_paths
+                            end
                         end
-                        segment_start = nothing
-                        current_segment = []
-                        gap_count = 0
                     end
                 end
             end
 
-            # Handle any remaining segment at the end
-            if length(current_segment) >= min_segment_length
-                push!(overlap_segments, (segment_start, current_segment[end]))
+            if !found_overlap
+                gap_count += 1
+                if gap_count > segment_gap_tolerance
+                    if length(current_segment) >= min_segment_length && length(overlapping_paths) > 1
+                        # Add segment with associated paths
+                        push!(overlap_segments, Dict("start_idx" => segment_start,
+                                                     "end_idx" => current_segment[end],
+                                                     "paths" => segment_map[(segment_start, current_segment[end])]))
+                    end
+                    segment_start = nothing
+                    current_segment = []
+                    gap_count = 0
+                    overlapping_paths = Set{Int}()  # Reset paths set for new segment
+                end
             end
+        end
+
+        # Handle any remaining segment at the end
+        if length(current_segment) >= min_segment_length && length(overlapping_paths) > 1
+            push!(overlap_segments, Dict("start_idx" => segment_start,
+                                         "end_idx" => current_segment[end],
+                                         "paths" => segment_map[(segment_start, current_segment[end])]))
         end
     end
 
@@ -118,17 +148,17 @@ function find_overlapping_segments_kdtree(
 end
 
 """
-    is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0001) -> Bool
+    is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0111) -> Bool
 
-Check if two GPS points are the same based on their latitude and longitude.
+Determine if two GPS points are within a given tolerance of each other.
 
 # Arguments
-- `gps1::Dict{String, Any}`: The first GPS point dictionary.
-- `gps2::Dict{String, Any}`: The second GPS point dictionary.
-- `tolerance::Float64=0.0001`: The tolerance within which the points are considered the same.
+- `gps1::Dict{String, Any}`: The first GPS point dictionary containing latitude and longitude.
+- `gps2::Dict{String, Any}`: The second GPS point dictionary containing latitude and longitude.
+- `tolerance::Float64`: The allowed difference in latitude and longitude between two points for them to be considered the same.
 
 # Returns
-- `Bool`: `true` if the two points are considered the same, `false` otherwise.
+- `Bool`: Returns `true` if the points are within the specified tolerance, `false` otherwise.
 """
 function is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0111)
     lat1 = gps1["latitude"]

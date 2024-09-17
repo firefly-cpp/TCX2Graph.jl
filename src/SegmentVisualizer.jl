@@ -17,40 +17,64 @@ Visualize the overlapping segments in red directly on the map.
 function plot_individual_overlapping_segments(
     gps_data::Dict{Int, Dict{String, Any}},
     paths::Vector{UnitRange{Int64}},
-    overlapping_segments::Vector{Tuple{Tuple{Int, Int}, Tuple{Int, Int}}},
-    save_path::String
+    overlapping_segments::Vector{Dict{String, Any}},
+    save_dir::String
 )
+    # Iterate through each overlapping segment
+    for (segment_idx, segment) in enumerate(overlapping_segments)
+        start_idx = segment["start_idx"]
+        end_idx = segment["end_idx"]
+        involved_paths = segment["paths"]
 
-    # Initialize the map with the base paths
-    p = plot(title="Map with Overlapping Segments",
-             xlabel="Longitude", ylabel="Latitude",
-             size=(1200, 800),
-             legend=:outertopright,
-             grid=false)
+        # Initialize a new plot for this segment
+        p = plot(title="Overlapping Segment $segment_idx",
+                 xlabel="Longitude", ylabel="Latitude",
+                 size=(800, 600),
+                 legend=:outertopright,
+                 grid=false)
 
-    # Plot each path in gray for context
-    for path in paths
-        lats, lons = [], []
-        for idx in path
-            push!(lats, gps_data[idx]["latitude"])
-            push!(lons, gps_data[idx]["longitude"])
+        # Plot all paths in gray for context
+        for path in paths
+            lats, lons = [], []
+            for idx in path
+                push!(lats, gps_data[idx]["latitude"])
+                push!(lons, gps_data[idx]["longitude"])
+            end
+            plot!(p, lons, lats, lw=1, color=:gray, alpha=0.5, label="Path")
         end
-        plot!(p, lons, lats, lw=1, color=:gray, alpha=0.5, label="Path")
-    end
 
-    # Plot the overlapping segments in red
-    for ((start_idx1, start_idx2), (end_idx1, end_idx2)) in overlapping_segments
-        segment_lats, segment_lons = [], []
+        # Plot the segment in each involved path with a unique color
+        path_colors = [:blue, :green, :orange, :purple, :yellow, :red, :pink, :brown]  # A list of colors for different paths
 
-        # Segment from the first path
-        for idx in start_idx1:end_idx1
-            push!(segment_lats, gps_data[idx]["latitude"])
-            push!(segment_lons, gps_data[idx]["longitude"])
+        for (k, path_idx) in enumerate(involved_paths)
+            path = paths[path_idx]
+            segment_lats, segment_lons = [], []
+
+            for idx in start_idx:end_idx
+                if idx in path
+                    push!(segment_lats, gps_data[idx]["latitude"])
+                    push!(segment_lons, gps_data[idx]["longitude"])
+                end
+            end
+
+            # Plot the overlapping segment in a unique color
+            plot!(p, segment_lons, segment_lats, lw=3, color=path_colors[k % length(path_colors)], label="Path $path_idx")
         end
-        plot!(p, segment_lons, segment_lats, lw=3, color=:red, label="Overlapping Segment", legend=false)
-    end
 
-    # Save the plot as an image
-    savefig(p, save_path)
-    println("Visualization saved to: $save_path")
+        # Mark start and end points with distinct markers
+        scatter!(p, [gps_data[start_idx]["longitude"]], [gps_data[start_idx]["latitude"]],
+                 markershape=:utriangle, markersize=8, markercolor=:green, label="Start Point")
+        scatter!(p, [gps_data[end_idx]["longitude"]], [gps_data[end_idx]["latitude"]],
+                 markershape=:circle, markersize=8, markercolor=:red, label="End Point")
+
+        # Display the paths involved in the overlap
+        path_str = join(involved_paths, ", ")
+        annotate!(p, gps_data[end_idx]["longitude"], gps_data[end_idx]["latitude"],
+                  text("Paths involved: $path_str", :black))
+
+        # Save the plot for this segment
+        save_path = joinpath(save_dir, "segment_$segment_idx.svg")
+        savefig(p, save_path)
+        println("Visualization for segment $segment_idx saved to: $save_path")
+    end
 end

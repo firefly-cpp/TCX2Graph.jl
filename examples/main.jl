@@ -6,7 +6,6 @@ function get_absolute_path(relative_path::String)
     return abspath(joinpath(@__DIR__, relative_path))
 end
 
-# Example of logging right after rule creation
 function save_rules_to_txt(rules, output_file)
     open(output_file, "w") do io
         for rule in rules
@@ -40,23 +39,26 @@ function main()
         end
     end
 
+    # Create property graph and KDTree
     graph, gps_data, paths = TCX2Graph.create_property_graph(tcx_files)
-
     kdtree = TCX2Graph.create_kdtree_index(gps_data)
 
-    #println("All GPS data: ", gps_data)
-
-    overlapping_segments = TCX2Graph.find_overlapping_segments_kdtree(gps_data, paths, kdtree)
-
-    #overlapping_segments = Vector{Tuple{Int64, Int64}}(overlapping_segments)
+    # Find overlapping segments across multiple paths
+    overlapping_segments = TCX2Graph.find_overlapping_segments_across_paths(gps_data, paths, kdtree)
 
     println("Overlapping segments (KD-tree): ", length(overlapping_segments))
 
+    # Plot individual overlapping segments
     TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./examples/segments_visualizations/")
 
+    # Extract transactions for association rule mining
     transactions_per_segment = TCX2Graph.extract_segment_data_for_arm(gps_data, overlapping_segments, paths)
     println("Prepared Transactions per Segment for ARM: ", length(transactions_per_segment))
 
+    # Save transactions to a file
+    TCX2Graph.save_transactions_to_txt(transactions_per_segment, "./examples/transactions/")
+
+    # ARM criterion and rule generation
     criterion = StoppingCriterion(maxevals=5000)
 
     for (i, segment_transactions) in enumerate(transactions_per_segment)
@@ -64,17 +66,14 @@ function main()
 
         df = DataFrame(segment_transactions)
 
-        #df = coalesce.(df, 0)  # change missing values to 0 TODO find better way to handle missing values
-
         result_de = mine(df, de, criterion, seed=1234)
-        #println("DE Result for Segment $i: ", result_de)
         save_rules_to_txt(result_de, "./examples/rules/rules_de_segment_$i.txt")
 
         result_pso = mine(df, pso, criterion, seed=1234)
-        #println("PSO Result for Segment $i: ", result_pso)
         save_rules_to_txt(result_pso, "./examples/rules/rules_pso_segment_$i.txt")
     end
 
+    # Final visualization of property graph
     TCX2Graph.plot_property_graph(gps_data, paths, save_path)
     println("Visualization saved to: ", save_path)
 end
