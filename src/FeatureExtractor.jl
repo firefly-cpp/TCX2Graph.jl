@@ -3,23 +3,26 @@
 # focusing on overlapping segments identified via KD-tree, and prepare them for ARM.
 
 using Combinatorics
+using DataFrames
+using NiaARM
 
 """
-    extract_segment_data_for_arm(gps_data::Dict{Int, Dict{String, Any}},
-                                 overlapping_segments::Vector{Tuple{Tuple{Int, Int}, Tuple{Int, Int}}},
-                                 paths::Vector{UnitRange{Int}}) -> Vector{Vector{Dict{String, Any}}}
+    extract_all_possible_transactions(gps_data::Dict{Int, Dict{String, Any}},
+                                      overlapping_segments::Vector{Dict{String, Any}},
+                                      paths::Vector{UnitRange{Int64}})
+                                      -> Vector{Vector{Dict{String, Any}}}
 
-Extract raw data from overlapping GPS segments across multiple TCX files and prepare it for ARM.
+Generate all possible transactions for each overlapping segment across multiple paths.
 
 # Arguments
-- `gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing GPS data where the key is a vertex identifier and the value is a dictionary of properties.
-- `overlapping_segments::Vector{Tuple{Tuple{Int, Int}, Tuple{Int, Int}}}`: A vector of tuples, each containing start and end indices of overlapping segments.
-- `paths::Vector{UnitRange{Int}}`: A vector of ranges representing the indices of vertices (GPS points) for each TCX file.
+- `gps_data::Dict{Int, Dict{String, Any}}`: The GPS data for each trackpoint.
+- `overlapping_segments::Vector{Dict{String, Any}}`: The overlapping segments with path information.
+- `paths::Vector{UnitRange{Int64}}`: The list of paths from the TCX files.
 
 # Returns
-- A vector of transactions where each GPS point is treated as an individual transaction.
+- `Vector{Vector{Dict{String, Any}}}`: A list of transactions for each segment, containing all combinations of features.
 """
-function extract_segment_data_for_arm(
+function extract_all_possible_transactions(
     gps_data::Dict{Int, Dict{String, Any}},
     overlapping_segments::Vector{Dict{String, Any}},
     paths::Vector{UnitRange{Int64}}
@@ -32,56 +35,60 @@ function extract_segment_data_for_arm(
     for segment in overlapping_segments
         segment_transactions = []
 
-        # Extract the start and end indices for the segment
         start_idx = segment["start_idx"]
         end_idx = segment["end_idx"]
-        segment_paths = segment["paths"]  # Paths where this segment occurs
+        segment_paths = segment["paths"]
 
-        # Loop through each path involved in this segment
+        all_points = []
         for path_idx in segment_paths
             path = paths[path_idx]
-
-            # For each GPS point in the segment, extract relevant features and build transactions
             for idx in start_idx:end_idx
                 if idx in path
                     point = gps_data[idx]
                     available_data = Dict{String, Any}()
-
-                    # Collect only non-missing data from the point
                     for feature in features
                         if haskey(point, feature) && point[feature] !== missing
                             available_data[feature] = point[feature]
+                            #println("Feature: ", feature, " Value: ", point[feature])
                         end
                     end
+                    #println("add to all_points")
+                    push!(all_points, available_data)
+                end
+            end
+        end
 
-                    # Generate all combinations of antecedents and consequents
-                    for k in 1:(length(keys(available_data)) - 1)
-                        antecedent_combinations = combinations(collect(keys(available_data)), k)
+        for (i, point1) in enumerate(all_points)
+            for (j, point2) in enumerate(all_points)
+                if i != j
+                    for k in 1:length(features) - 1
+                        antecedent_combinations = combinations(collect(keys(point1)), k)
                         for antecedent_keys in antecedent_combinations
                             antecedent = Dict{String, Any}()
                             consequent = Dict{String, Any}()
 
-                            # Fill antecedent and consequent from available data
+                            # Build the antecedent
                             for key in antecedent_keys
-                                antecedent[key] = available_data[key]
-                            end
-                            # Remaining features go to the consequent
-                            for key in setdiff(keys(available_data), antecedent_keys)
-                                consequent[key] = available_data[key]
+                                antecedent[key] = point1[key]
                             end
 
-                            # Create the transaction
+                            # Build the consequent from point2
+                            for key in setdiff(keys(point2), antecedent_keys)
+                                consequent[key] = point2[key]
+                            end
+
                             if !isempty(antecedent) && !isempty(consequent)
                                 transaction = Dict("antecedent" => antecedent, "consequent" => consequent)
+                                #println("add to segment_transactions")
                                 push!(segment_transactions, transaction)
                             end
+
                         end
                     end
                 end
             end
         end
 
-        # Add segment's transactions to overall result
         if !isempty(segment_transactions)
             push!(transactions_per_segment, segment_transactions)
         end
@@ -110,14 +117,8 @@ function save_transactions_to_txt(transactions, output_dir)
 
         open(output_file, "w") do io
             for transaction in segment_transactions
-                # Save the antecedent
-                antecedent_str = "Antecedent: " * string(transaction["antecedent"]) * "\n"
-                write(io, antecedent_str)
-
-                # Save the consequent
-                consequent_str = "Consequent: " * string(transaction["consequent"]) * "\n"
-                write(io, consequent_str)
-
+                write(io, "Antecedent: ", string(transaction["antecedent"]), "\n")
+                write(io, "Consequent: ", string(transaction["consequent"]), "\n")
                 write(io, "\n-----------------------------\n")
             end
         end

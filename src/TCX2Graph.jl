@@ -5,7 +5,7 @@
 module TCX2Graph
 
 export read_tcx_gps_points, create_property_graph, find_overlapping_segments_across_paths,
-       extract_segment_data_for_arm, plot_property_graph, round_coord, create_kdtree_index, plot_individual_overlapping_segments,
+       extract_all_possible_transactions, plot_property_graph, round_coord, create_kdtree_index, plot_individual_overlapping_segments,
        save_transactions_to_txt
 
 include("TCXParser.jl")

@@ -23,11 +23,11 @@ end
 function main()
 
     tcx_files = [
-        get_absolute_path("../example_data/activity_12163012156.tcx"),
-        get_absolute_path("../example_data/activity_12171312300.tcx"),
-        get_absolute_path("../example_data/activity_12186252814.tcx"),
-        get_absolute_path("../example_data/activity_12270580292.tcx"),
-        get_absolute_path("../example_data/activity_12381259800.tcx")
+        #get_absolute_path("../example_data/activity_12163012156.tcx"),
+        #get_absolute_path("../example_data/activity_12171312300.tcx"),
+        #get_absolute_path("../example_data/activity_12186252814.tcx"),
+        get_absolute_path("../example_data/activity_12270580292.tcx"),#ok
+        get_absolute_path("../example_data/activity_12381259800.tcx") #ok
     ]
 
     save_path = get_absolute_path("multi_tcx_graph_property.svg")
@@ -52,7 +52,7 @@ function main()
     TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./examples/segments_visualizations/")
 
     # Extract transactions for association rule mining
-    transactions_per_segment = TCX2Graph.extract_segment_data_for_arm(gps_data, overlapping_segments, paths)
+    transactions_per_segment = TCX2Graph.extract_all_possible_transactions(gps_data, overlapping_segments, paths)
     println("Prepared Transactions per Segment for ARM: ", length(transactions_per_segment))
 
     # Save transactions to a file
