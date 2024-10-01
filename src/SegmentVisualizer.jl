@@ -58,7 +58,7 @@ function plot_individual_overlapping_segments(
             end
 
             # Plot the overlapping segment in a unique color
-            plot!(p, segment_lons, segment_lats, lw=3, color=path_colors[k % length(path_colors)], label="Path $path_idx")
+            plot!(p, segment_lons, segment_lats, lw=3, color=path_colors[mod(k - 1, length(path_colors)) + 1], label="Path $path_idx")
         end
 
         # Mark start and end points with distinct markers

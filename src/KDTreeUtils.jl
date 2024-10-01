@@ -3,6 +3,10 @@
 
 using NearestNeighbors
 using StaticArrays
+using Base.Threads
+
+overlap_segments_lock = ReentrantLock()
+segment_map_lock = ReentrantLock()
 
 """
     gps_to_point(gps::Dict{String, Any}) -> SVector{2, Float64}
@@ -67,18 +71,15 @@ function find_overlapping_segments_across_paths(
     min_segment_length::Int=3,
     segment_gap_tolerance::Int=5
 ) :: Vector{Dict{String, Any}}
-    # This will store segments with their associated paths
-    overlap_segments = []
-
-    # A mapping from segment identifiers to the paths they appear in
+    overlap_segments = Vector{Dict{String, Any}}()
     segment_map = Dict{Tuple{Int, Int}, Set{Int}}()
 
-    # Iterate over all paths
-    for (path_idx, path) in enumerate(paths)
+    @threads for path_idx in 1:length(paths)
+        path = paths[path_idx]  # Get the path for the current index
         segment_start = nothing
         current_segment = []
         gap_count = 0
-        overlapping_paths = Set{Int}()  # Initialize here for each new segment
+        overlapping_paths = Set{Int}()
 
         for idx in path
             gps1 = gps_to_point(all_gps_data[idx])
@@ -86,15 +87,13 @@ function find_overlapping_segments_across_paths(
 
             found_overlap = false
 
-            # Check for overlaps in other paths
             for candidate_idx in candidates
-                # Skip if candidate is in the same path
                 if candidate_idx in path
                     continue
                 end
 
-                # Check if the candidate point is in a different path
-                for (other_path_idx, other_path) in enumerate(paths)
+                for other_path_idx in 1:length(paths)
+                    other_path = paths[other_path_idx]
                     if candidate_idx in other_path && other_path_idx != path_idx
                         if is_same_location(all_gps_data[idx], all_gps_data[candidate_idx]; tolerance=max_gap * 20)
                             found_overlap = true
@@ -107,12 +106,14 @@ function find_overlapping_segments_across_paths(
 
                             push!(current_segment, idx)
 
-                            # Update the segment_map
                             segment_key = (segment_start, idx)
-                            if haskey(segment_map, segment_key)
-                                push!(segment_map[segment_key], path_idx)
-                            else
-                                segment_map[segment_key] = overlapping_paths
+                            # Update the segment_map within a lock to ensure thread safety
+                            lock(segment_map_lock) do
+                                if haskey(segment_map, segment_key)
+                                    push!(segment_map[segment_key], path_idx)
+                                else
+                                    segment_map[segment_key] = overlapping_paths
+                                end
                             end
                         end
                     end
@@ -123,24 +124,27 @@ function find_overlapping_segments_across_paths(
                 gap_count += 1
                 if gap_count > segment_gap_tolerance
                     if length(current_segment) >= min_segment_length && length(overlapping_paths) > 1
-                        # Add segment with associated paths
-                        push!(overlap_segments, Dict("start_idx" => segment_start,
-                                                     "end_idx" => current_segment[end],
-                                                     "paths" => segment_map[(segment_start, current_segment[end])]))
+                        # Add segment with associated paths within a lock
+                        lock(overlap_segments_lock) do
+                            push!(overlap_segments, Dict("start_idx" => segment_start,
+                                                         "end_idx" => current_segment[end],
+                                                         "paths" => segment_map[(segment_start, current_segment[end])]))
+                        end
                     end
                     segment_start = nothing
                     current_segment = []
                     gap_count = 0
-                    overlapping_paths = Set{Int}()  # Reset paths set for new segment
+                    overlapping_paths = Set{Int}()
                 end
             end
         end
 
-        # Handle any remaining segment at the end
         if length(current_segment) >= min_segment_length && length(overlapping_paths) > 1
-            push!(overlap_segments, Dict("start_idx" => segment_start,
-                                         "end_idx" => current_segment[end],
-                                         "paths" => segment_map[(segment_start, current_segment[end])]))
+            lock(overlap_segments_lock) do
+                push!(overlap_segments, Dict("start_idx" => segment_start,
+                                             "end_idx" => current_segment[end],
+                                             "paths" => segment_map[(segment_start, current_segment[end])]))
+            end
         end
     end
 
