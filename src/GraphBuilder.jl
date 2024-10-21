@@ -1,22 +1,29 @@
-# GraphBuilder.jl
-# This file provides functions to create a property graph from TCX files.
-
 using Graphs
 
 """
-    create_property_graph(tcx_files::Vector{String}) -> (SimpleGraph, Dict{Int, Dict{String, Any}}, Vector{UnitRange{Int64}})
+    create_property_graph(tcx_files::Vector{String})
+    -> (SimpleGraph, Dict{Int, Dict{String, Any}}, Vector{UnitRange{Int64}})
 
-Create a property graph from a list of TCX files. Each vertex in the graph represents a GPS point with associated properties,
-and edges connect consecutive GPS points within each file. The function returns the graph, a dictionary of GPS data with properties,
-and a vector of paths representing the ranges of vertices for each TCX file.
+Creates a property graph from a list of TCX files. Each vertex in the graph represents a GPS point with associated properties
+(e.g., latitude, longitude, speed, etc.), and edges connect consecutive GPS points from the same TCX file. The function
+returns the graph, a dictionary of GPS data with properties for each vertex, and a vector of paths representing ranges of vertices
+for each TCX file.
 
 # Arguments
-- `tcx_files::Vector{String}`: A vector of file paths to the TCX files.
+- `tcx_files::Vector{String}`: A vector containing file paths to the TCX files to be processed.
 
 # Returns
-- `SimpleGraph`: A graph where each vertex represents a GPS point and edges connect consecutive points.
-- `Dict{Int, Dict{String, Any}}`: A dictionary where the key is a vertex index and the value is a dictionary of GPS properties.
-- `Vector{UnitRange{Int64}}`: A vector of ranges, each representing the indices of vertices for a specific TCX file.
+- `SimpleGraph`: A graph where each vertex represents a GPS point, and edges represent consecutive points within each path.
+- `Dict{Int, Dict{String, Any}}`: A dictionary where the key is a vertex index and the value is a dictionary of properties
+   (such as latitude, longitude, speed, etc.) for the corresponding GPS point.
+- `Vector{UnitRange{Int64}}`: A vector of ranges, where each range corresponds to the indices of vertices for a specific TCX file.
+
+# Details
+This function processes each TCX file by reading the GPS points and creating a graph with vertices and edges. Each vertex
+in the graph holds properties related to a GPS point, such as latitude, longitude, and other metrics. The edges connect
+consecutive GPS points within each TCX file. The function also returns a dictionary containing the properties for each vertex
+and a vector representing the vertex ranges for each path (i.e., each TCX file).
+
 """
 function create_property_graph(tcx_files::Vector{String})
     graph = SimpleGraph()

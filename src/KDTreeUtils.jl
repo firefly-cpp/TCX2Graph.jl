@@ -1,6 +1,3 @@
-# KDTreeUtils.jl
-# This file provides functions to create a KD-tree index from GPS data and find overlapping segments using the KD-tree.
-
 using NearestNeighbors
 using StaticArrays
 using Base.Threads
@@ -11,13 +8,17 @@ segment_map_lock = ReentrantLock()
 """
     gps_to_point(gps::Dict{String, Any}) -> SVector{2, Float64}
 
-Convert GPS data into a point (latitude and longitude) for KD-tree insertion.
+Converts GPS data into a 2D point (latitude, longitude) for KD-tree insertion.
 
 # Arguments
 - `gps::Dict{String, Any}`: A dictionary containing GPS properties, particularly latitude and longitude.
 
 # Returns
-- `SVector{2, Float64}`: A 2D static vector representing the GPS point's longitude and latitude.
+- `SVector{2, Float64}`: A 2D static vector where the first element is longitude and the second is latitude, representing the GPS point.
+
+# Details
+This function extracts the `latitude` and `longitude` from the provided GPS data and returns them as a static 2D vector (`SVector`),
+suitable for use in a KD-tree for spatial queries.
 """
 function gps_to_point(gps::Dict{String, Any})
     lat = gps["latitude"]
@@ -28,13 +29,17 @@ end
 """
     create_kdtree_index(all_gps_data::Dict{Int, Dict{String, Any}}) -> KDTree{Float64, 2}
 
-Create a KD-tree index from GPS data for efficient spatial queries.
+Creates a KD-tree index from GPS data for efficient spatial queries.
 
 # Arguments
-- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary where the key is the index of the GPS point, and the value is a dictionary of GPS properties.
+- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary where the key is the index of a GPS point, and the value is a dictionary of GPS properties, particularly latitude and longitude.
 
 # Returns
-- `KDTree{Float64, 2}`: A KD-tree that can be used for spatial queries.
+- `KDTree{Float64, 2}`: A KD-tree where each node represents a 2D point (longitude, latitude) that can be used for spatial queries.
+
+# Details
+This function takes all the GPS data, extracts the `longitude` and `latitude` from each point, and constructs a KD-tree to enable
+efficient nearest-neighbor searches.
 """
 function create_kdtree_index(all_gps_data::Dict{Int, Dict{String, Any}})
     points = [SVector{2, Float64}(gps["longitude"], gps["latitude"]) for gps in values(all_gps_data)]
@@ -50,18 +55,25 @@ end
                                            segment_gap_tolerance::Int=5)
                                            -> Vector{Dict{String, Any}}
 
-Find overlapping GPS segments across multiple paths using a KD-tree and associate them with the paths in which they appear.
+Finds overlapping GPS segments across multiple paths using a KD-tree for efficient spatial queries and associates them with
+the paths in which they appear.
 
 # Arguments
-- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing GPS data with properties for each GPS point.
-- `paths::Vector{UnitRange{Int64}}`: A vector representing ranges of GPS indices for each path (TCX file).
-- `kdtree::KDTree{Float64, 2}`: A KD-tree for efficient spatial querying of GPS data.
+- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing GPS data with properties for each GPS point, particularly latitude and longitude.
+- `paths::Vector{UnitRange{Int64}}`: A vector representing ranges of GPS indices for each path (e.g., from TCX files).
+- `kdtree::KDTree{Float64, 2}`: A KD-tree built from GPS points for efficient nearest-neighbor searches.
 - `max_gap::Float64`: Maximum allowed distance (in degrees) between consecutive points in an overlapping segment.
 - `min_segment_length::Int`: Minimum number of points required to consider an overlapping segment valid.
-- `segment_gap_tolerance::Int`: Maximum consecutive non-overlapping points allowed before a segment is ended.
+- `segment_gap_tolerance::Int`: Maximum number of consecutive non-overlapping points allowed before the segment is ended.
 
 # Returns
-- `Vector{Dict{String, Any}}`: A vector of dictionaries where each dictionary represents an overlapping segment, including the start and end points and the paths it is found in.
+- `Vector{Dict{String, Any}}`: A vector of dictionaries representing overlapping segments, each containing the start and end indices of the segment
+  and the paths in which the segment appears.
+
+# Details
+This function finds overlapping GPS segments across different paths using spatial proximity queries via a KD-tree. Segments are
+formed by identifying GPS points that are spatially close across different paths and satisfy the gap and length criteria. Each
+identified segment is returned as a dictionary, including the start and end indices of the segment and the list of paths that overlap.
 """
 function find_overlapping_segments_across_paths(
     all_gps_data::Dict{Int, Dict{String, Any}},
@@ -154,15 +166,19 @@ end
 """
     is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0111) -> Bool
 
-Determine if two GPS points are within a given tolerance of each other.
+Determines if two GPS points are within a given tolerance of each other.
 
 # Arguments
-- `gps1::Dict{String, Any}`: The first GPS point dictionary containing latitude and longitude.
-- `gps2::Dict{String, Any}`: The second GPS point dictionary containing latitude and longitude.
+- `gps1::Dict{String, Any}`: A dictionary containing latitude and longitude for the first GPS point.
+- `gps2::Dict{String, Any}`: A dictionary containing latitude and longitude for the second GPS point.
 - `tolerance::Float64`: The allowed difference in latitude and longitude between two points for them to be considered the same.
 
 # Returns
 - `Bool`: Returns `true` if the points are within the specified tolerance, `false` otherwise.
+
+# Details
+This function compares the `latitude` and `longitude` of two GPS points and determines whether they are spatially close
+based on the given tolerance. It checks whether the absolute differences in both latitude and longitude are below the tolerance.
 """
 function is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0111)
     lat1 = gps1["latitude"]

@@ -1,7 +1,3 @@
-# FeatureExtractor.jl
-# This file provides functions to extract and prepare raw features from GPS data,
-# focusing on overlapping segments identified via KD-tree, and prepare them for ARM.
-
 using Combinatorics
 using DataFrames
 using NiaARM
@@ -12,15 +8,18 @@ using NiaARM
                                       paths::Vector{UnitRange{Int64}})
                                       -> Vector{Vector{Dict{String, Any}}}
 
-Generate all possible transactions for each overlapping segment across multiple paths.
+Generates all possible transactions for each overlapping segment across multiple paths.
 
 # Arguments
-- `gps_data::Dict{Int, Dict{String, Any}}`: The GPS data for each trackpoint.
-- `overlapping_segments::Vector{Dict{String, Any}}`: The overlapping segments with path information.
-- `paths::Vector{UnitRange{Int64}}`: The list of paths from the TCX files.
+- `gps_data::Dict{Int, Dict{String, Any}}`: A dictionary containing the GPS data for each trackpoint, where the key is the index, and the value is another dictionary with trackpoint features (e.g., speed, altitude).
+- `overlapping_segments::Vector{Dict{String, Any}}`: A vector of dictionaries representing overlapping segments, each containing segment-specific information, including path indices and start/end indices of the segment.
+- `paths::Vector{UnitRange{Int64}}`: A vector of paths from the TCX files, where each path is represented as a range of trackpoint indices.
 
 # Returns
-- `Vector{Vector{Dict{String, Any}}}`: A list of transactions for each segment, containing all combinations of features.
+- `Vector{Vector{Dict{String, Any}}}`: A list of transaction lists, where each transaction corresponds to a segment and contains combinations of antecedent and consequent features.
+
+# Details
+This function iterates over the overlapping segments and their corresponding paths. For each segment, it extracts all points within the overlapping range from the GPS data, generates antecedent-consequent pairs for feature combinations, and returns a list of transactions for each segment.
 """
 function extract_all_possible_transactions(
     gps_data::Dict{Int, Dict{String, Any}},
@@ -49,10 +48,8 @@ function extract_all_possible_transactions(
                     for feature in features
                         if haskey(point, feature) && point[feature] !== missing
                             available_data[feature] = point[feature]
-                            #println("Feature: ", feature, " Value: ", point[feature])
                         end
                     end
-                    #println("add to all_points")
                     push!(all_points, available_data)
                 end
             end
@@ -79,7 +76,6 @@ function extract_all_possible_transactions(
 
                             if !isempty(antecedent) && !isempty(consequent)
                                 transaction = Dict("antecedent" => antecedent, "consequent" => consequent)
-                                #println("add to segment_transactions")
                                 push!(segment_transactions, transaction)
                             end
 
@@ -100,16 +96,16 @@ end
 """
     save_transactions_to_txt(transactions::Vector{Vector{Dict{String, Any}}}, output_dir::String)
 
-Save the transactions for each segment into separate text files. Each file will contain the antecedent and consequent pairs
-for all transactions in a specific segment.
+Saves the transactions for each segment into separate text files. Each file will contain antecedent-consequent pairs
+for all transactions related to a specific segment.
 
 # Arguments
-- `transactions::Vector{Vector{Dict{String, Any}}}`: A vector where each element contains the transactions for a segment.
-- `output_dir::String`: Directory where each segment's transactions will be saved as separate text files.
+- `transactions::Vector{Vector{Dict{String, Any}}}`: A vector where each element is a list of transactions for a particular segment.
+- `output_dir::String`: The directory where the transactions will be saved. Each segment will be saved into its own file.
 
 # Details
-This function iterates over the transactions for each segment and saves them into individual text files in the specified directory.
-Each file will be named as `transactions_segment_X.txt` where `X` is the segment number.
+This function creates a text file for each segment's transactions. The files are named in the format `transactions_segment_X.txt`,
+where `X` is the index of the segment. Each file will list the antecedent-consequent pairs, separated by a line.
 """
 function save_transactions_to_txt(transactions, output_dir)
     for (segment_idx, segment_transactions) in enumerate(transactions)
