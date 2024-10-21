@@ -1,5 +1,5 @@
 <p align="center">
-    <img width="200" src=".github/logo/tcx2graph_jl.webp">
+    <img width="200" src=".github/logo/TCX2Graph_jl.webp">
 </p>
 
 <h1 align="center">
