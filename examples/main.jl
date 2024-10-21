@@ -33,7 +33,7 @@ function main()
     println("Overlapping segments (KD-tree): ", length(overlapping_segments))
 
     # Plot individual overlapping segments
-    TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./examples/segments_visualizations/")
+    TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./examples/")
 
     # Choose segment index for analysis
     segment_idx = 1
