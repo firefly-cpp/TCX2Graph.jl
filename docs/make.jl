@@ -8,6 +8,6 @@ makedocs(
 )
 
 deploydocs(
-    repo = "https://github.com/firefly-cpp/TCX2Graph.jl.git",
+    repo = "github.com/firefly-cpp/TCX2Graph.jl.git",
     target = "build"
 )
