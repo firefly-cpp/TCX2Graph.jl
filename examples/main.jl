@@ -1,5 +1,4 @@
 include("../src/TCX2Graph.jl")
-using NiaARM
 
 function main()
     # Path to the folder containing the .tcx files
