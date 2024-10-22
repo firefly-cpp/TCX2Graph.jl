@@ -11,3 +11,11 @@ Welcome to the documentation for `TCX2Graph.jl`.
 ```julia
 using Pkg
 Pkg.add("TCX2Graph")
+```
+
+# Module Documentation
+
+```@docs
+TCX2Graph.TCX2Graph
+```
+
