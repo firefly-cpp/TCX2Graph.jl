@@ -38,7 +38,7 @@ module TCX2Graph
 
 export read_tcx_gps_points, create_property_graph, find_overlapping_segments_across_paths,
        plot_property_graph, round_coord, create_kdtree_index, plot_individual_overlapping_segments,
-       custom_atan2, haversine_distance, compute_segment_characteristics, get_absolute_path, save_rules_to_txt,
+       custom_atan2, haversine_distance, compute_segment_characteristics, get_absolute_path,
        get_tcx_files_from_directory
 
 include("TCXParser.jl")
