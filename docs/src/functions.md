@@ -43,3 +43,22 @@ Creates a KD-tree index for fast nearest neighbor queries based on the GPS data.
 
 #### `TCX2Graph.gps_to_point(gps_data::Dict{String, Any}) -> Tuple{Float64, Float64}`
 Converts a GPS point to a tuple of latitude and longitude.
+
+# Functions Documentation
+
+```@docs
+TCX2Graph.get_absolute_path
+TCX2Graph.get_tcx_files_from_directory
+TCX2Graph.plot_property_graph
+TCX2Graph.is_same_location
+TCX2Graph.find_overlapping_segments_across_paths
+TCX2Graph.create_property_graph
+TCX2Graph.haversine_distance
+TCX2Graph.custom_atan2
+TCX2Graph.compute_segment_characteristics
+TCX2Graph.plot_individual_overlapping_segments
+TCX2Graph.read_tcx_gps_points
+TCX2Graph.round_coord
+TCX2Graph.create_kdtree_index
+TCX2Graph.gps_to_point
+```
