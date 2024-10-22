@@ -5,6 +5,9 @@ makedocs(
     sitename = "TCX2Graph Documentation",
     modules  = [TCX2Graph],
     format   = Documenter.HTML(),
+    pages    = [
+            "Home" => "index.md",
+        ]
 )
 
 deploydocs(
