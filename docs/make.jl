@@ -10,8 +10,3 @@ makedocs(
             "Functions" => "functions.md",
         ]
 )
-
-deploydocs(
-    repo = "github.com/firefly-cpp/TCX2Graph.jl.git",
-    target = "build"
-)
