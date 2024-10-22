@@ -1,4 +1,4 @@
-exitname = "TCX2Graph"
+name = "TCX2Graph"
 uuid = "7c1b654f-8326-48fd-8083-965747c58dac"
 authors = ["Tilen Hliš <tilen.hlis@proton.me>", "Iztok Fister, Jr. <iztok@iztok-jr-fister.eu>"]
 version = "0.1.0"
