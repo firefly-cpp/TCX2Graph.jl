@@ -7,7 +7,7 @@ println("Number of threads: ", Threads.nthreads())
 
 function main()
     # Path to the folder containing the .tcx files
-    tcx_folder_path = TCX2Graph.get_absolute_path("../example_data/3")
+    tcx_folder_path = TCX2Graph.get_absolute_path("../example_data/files")
 
     # Get all .tcx files from the folder
     tcx_files = TCX2Graph.get_tcx_files_from_directory(tcx_folder_path)
