@@ -112,3 +112,19 @@ function get_tcx_files_from_directory(directory::String)
     # Convert relative file paths to absolute paths
     return [abspath(joinpath(directory, file)) for file in tcx_files]
 end
+
+"""
+    euclidean_distance(point1::Tuple{Float64, Float64}, point2::Tuple{Float64, Float64}) -> Float64
+
+Calculates the Euclidean distance between two points in 2D space.
+
+# Arguments
+- `point1::Tuple{Float64, Float64}`: The first point as a tuple (longitude, latitude).
+- `point2::Tuple{Float64, Float64}`: The second point as a tuple (longitude, latitude).
+
+# Returns
+- `Float64`: The Euclidean distance between the two points.
+"""
+function euclidean_distance(point1::Tuple{Float64, Float64}, point2::Tuple{Float64, Float64}) :: Float64
+    return norm(SVector(point1...) - SVector(point2...))
+end

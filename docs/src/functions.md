@@ -44,6 +44,9 @@ Creates a KD-tree index for fast nearest neighbor queries based on the GPS data.
 #### `TCX2Graph.gps_to_point(gps_data::Dict{String, Any}) -> Tuple{Float64, Float64}`
 Converts a GPS point to a tuple of latitude and longitude.
 
+#### `TCX2Graph.euclidean_distance(point1::Tuple{Float64, Float64}, point2::Tuple{Float64, Float64}) -> Float64`
+Calculates the Euclidean distance between two points specified by their latitude and longitude.
+
 # Functions Documentation
 
 ```@docs
@@ -61,4 +64,5 @@ TCX2Graph.read_tcx_gps_points
 TCX2Graph.round_coord
 TCX2Graph.create_kdtree_index
 TCX2Graph.gps_to_point
+TCX2Graph.euclidean_distance
 ```

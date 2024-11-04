@@ -206,6 +206,6 @@ It returns `true` if the distance is within the given tolerance, making it suita
 function is_same_location(gps1::Dict{String, Any}, gps2::Dict{String, Any}; tolerance=0.0015)
     point1 = SVector(gps1["longitude"], gps1["latitude"])
     point2 = SVector(gps2["longitude"], gps2["latitude"])
-    return norm(point1 - point2) <= tolerance
+    return euclidean_distance(point1, point2) <= tolerance
 end
 
