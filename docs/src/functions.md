@@ -47,6 +47,9 @@ Converts a GPS point to a tuple of latitude and longitude.
 #### `TCX2Graph.euclidean_distance(point1::Tuple{Float64, Float64}, point2::Tuple{Float64, Float64}) -> Float64`
 Calculates the Euclidean distance between two points specified by their latitude and longitude.
 
+#### `TCX2Graph.find_path_between_segments(gps_data::Dict{Int64, Dict{String, Any}}, start_idx::Int, end_idx::Int, tolerance::Float64) -> Vector{Dict{String, Any}}`
+Finds the path between two segments based on the GPS data and tolerance.
+
 # Functions Documentation
 
 ```@docs
@@ -65,4 +68,5 @@ TCX2Graph.round_coord
 TCX2Graph.create_kdtree_index
 TCX2Graph.gps_to_point
 TCX2Graph.euclidean_distance
+TCX2Graph.find_path_between_segments
 ```
