@@ -53,16 +53,32 @@ function main()
     # println("Average Gradient: $(avg_gradient * 100)%")
 
     # Final visualization of property graph
-    # TCX2Graph.plot_property_graph(gps_data, paths, save_path)
-    # println("Visualization saved to: ", save_path)
+    #TCX2Graph.plot_property_graph(gps_data, paths, save_path)
+    #println("Visualization saved to: ", save_path)
 
-    #paths_between_segments = TCX2Graph.find_path_between_segments(
-    #    overlapping_segments[13],
-    #    overlapping_segments[14],
-    #    overlapping_segments
-    #)
+    # Example of selecting start and end segments (use actual indices or logic as needed)
+    #start_segment = overlapping_segments[1]  # Select your actual start segment
+    #end_segment = overlapping_segments[2]  # Select your actual end segment
 
-    #println("Paths between segments: ", paths_between_segments)
+    # Call the function to find the path between the selected start and end segments
+    #try
+    #    path_segments = TCX2Graph.find_path_between_segments(
+    #            start_segment,
+    #            end_segment,
+    #            overlapping_segments,
+    #            gps_data;
+    #            min_length=3,       # Adjust this as needed
+    #            min_paths=2,        # Adjust this as needed
+    #            tolerance=0.006     # Adjust this as needed
+    #        )
+    #
+    #    println("Path found with segments:")
+    #    for segment in path_segments
+    #      println(segment)
+    #    end
+    #catch e
+    #    println("Error finding path: ", e)
+    #end
 end
 
 main()
