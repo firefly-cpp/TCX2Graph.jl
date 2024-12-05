@@ -128,3 +128,4 @@ Calculates the Euclidean distance between two points in 2D space.
 function euclidean_distance(point1, point2) :: Float64
     return norm(SVector(point1...) - SVector(point2...))
 end
+

@@ -26,7 +26,7 @@ Calculates the Haversine distance between two points specified by their latitude
 #### `TCX2Graph.custom_atan2(y::Any, x::Any) -> Float64`
 Custom implementation of the `atan2` function to compute the angle between two points.
 
-#### `TCX2Graph.compute_segment_characteristics(gps_data::Dict{Int64, Dict{String, Any}}, start_idx::Int, end_idx::Int) -> Dict{String, Any}`
+#### `TCX2Graph.compute_segment_characteristics_basic(gps_data::Dict{Int64, Dict{String, Any}}, start_idx::Int, end_idx::Int) -> Dict{String, Any}`
 Computes characteristics for a segment of the path based on the GPS data.
 
 #### `TCX2Graph.plot_individual_overlapping_segments(gps_data::Dict{Int64, Dict{String, Any}}, paths::Vector{UnitRange{Int64}}, overlapping_segments::Vector{Dict{String, Any}}, output_file::String)`
@@ -61,7 +61,7 @@ TCX2Graph.find_overlapping_segments_across_paths
 TCX2Graph.create_property_graph
 TCX2Graph.haversine_distance
 TCX2Graph.custom_atan2
-TCX2Graph.compute_segment_characteristics
+TCX2Graph.compute_segment_characteristics_basic
 TCX2Graph.plot_individual_overlapping_segments
 TCX2Graph.read_tcx_gps_points
 TCX2Graph.round_coord
