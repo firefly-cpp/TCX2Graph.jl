@@ -5,6 +5,7 @@ function support(segments::Vector{Dict{String, Any}}, antecedent::Vector{Dict{St
     end
 
     count_antecedent = count(segment -> all(attr -> satisfies_condition(segment, attr), antecedent), segments)
+
     return count_antecedent / total_segments
 end
 
@@ -25,9 +26,11 @@ end
 
 function satisfies_condition(segment::Dict{String, Any}, attr::Dict{String, Any})::Bool
     if haskey(segment, attr["feature"]) && attr["type"] == "Numerical"
-        feature_value = segment[attr["feature"]]["avg"]
-        return attr["border1"] <= feature_value <= attr["border2"]
-    else
-        return false
+        feature = segment[attr["feature"]]
+        if haskey(feature, "avg")
+            feature_value = feature["avg"]
+            return attr["border1"] <= feature_value <= attr["border2"]
+        end
     end
+    return false
 end

@@ -129,3 +129,19 @@ function euclidean_distance(point1, point2) :: Float64
     return norm(SVector(point1...) - SVector(point2...))
 end
 
+function count_sub_features(features::Vector{Dict{String, Any}})::Int
+    total_sub_features = 0
+    for feature in features
+        for (key, value) in feature
+            if key in ["start_idx", "end_idx"]
+                continue
+            end
+
+            if value isa Dict && all(σ -> haskey(value, σ), ["min", "max", "avg"])
+                total_sub_features += 1
+            end
+        end
+    end
+    println("Total valid sub-features (numerical only): $total_sub_features")
+    return total_sub_features
+end

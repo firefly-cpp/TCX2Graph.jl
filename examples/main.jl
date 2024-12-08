@@ -88,50 +88,29 @@ function main()
     println("Extracting features for path segments...")
     filtered_features = TCX2Graph.filter_features(path_features)
     println("Filtered features: ", filtered_features)
-    println("Number of features after filtering: ", length(filtered_features))
 
-    # Calculate vector size based on numerical features
-    num_features = length(filtered_features)
-    println("Number of numerical features: ", num_features)
-
-    problem = (
-        dimension=2 * length(filtered_features) + length(filtered_features),      # Number of features determines dimensions
-        lowerbound=0.0,              # Lower bound for solution space
-        upperbound=1.0,              # Upper bound for solution space
-        features=filtered_features   # Add features for fitness calculation
+    # Run PSO
+    best_fitness_pso = TCX2Graph.run_pso(
+        TCX2Graph.fitness_function,
+        filtered_features,
+        100;
+        popsize=20,
+        omega=0.7,
+        c1=2.0,
+        c2=2.0
     )
+    println("Best PSO Fitness: ", best_fitness_pso)
 
-    # Define stopping criteria for evolutionary algorithms
-    stopping_criterion = 100  # Adjust based on desired evaluations or iterations
-
-    # Run Particle Swarm Optimization (PSO)
-    println("Running PSO...")
-    best_solution_pso, best_fitness_pso = TCX2Graph.pso(
-        TCX2Graph.fitness_function, # Fitness function
-        problem,                    # Problem definition
-        stopping_criterion;         # Stopping criterion
-        popsize=20,                 # Population size
-        omega=0.7,                  # Inertia weight
-        c1=2.0,                     # Cognitive component
-        c2=2.0,                     # Social component
-        seed=42                     # Random seed for reproducibility
+    # Run DE
+    best_fitness_de = TCX2Graph.run_de(
+        TCX2Graph.fitness_function,
+        filtered_features,
+        100;
+        popsize=50,
+        cr=0.8,
+        f=0.9
     )
-    println("Best solution (PSO): ", best_solution_pso)
-    println("Best fitness (PSO): ", best_fitness_pso)
-
-    # Run Differential Evolution (DE)
-    println("Running DE...")
-    best_solution_de, best_fitness_de = TCX2Graph.de(
-        TCX2Graph.fitness_function, # Fitness function
-        problem,                    # Problem definition
-        stopping_criterion;         # Stopping criterion
-        popsize=50,                 # Population size
-        cr=0.8,                     # Crossover probability
-        f=0.9,                      # Differential weight
-        seed=42                     # Random seed for reproducibility
-    )
-    println("Best solution (DE): ", best_solution_de)
-    println("Best fitness (DE): ", best_fitness_de)
+    println("Best DE Fitness: ", best_fitness_de)
 
 end
 

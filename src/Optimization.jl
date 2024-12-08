@@ -1,38 +1,41 @@
-function fitness_function(solution::Vector{Float64}; problem::NamedTuple)::Float64
-    println("Debug: Solution length = ", length(solution))
-    println("Debug: Expected length = ", 2 * length(problem.features) + length(problem.features))
+function fitness_function(solution::AbstractVector{Float64}; problem::Problem, features::Vector{Dict{String, Any}})::Float64
+    solution = Vector(solution)
 
-    support_weight = 1.0
-    confidence_weight = 1.0
+    num_features = count_sub_features(features)
+    expected_length = 4 * num_features + num_features + 3
 
-    cut_point_val = solution[end]
-    rule = build_rule(solution[1:end], problem.features)
+    println("Expected solution length: $expected_length")
+    println("Actual solution length: $(length(solution))")
+    println("Number of features: $num_features")
 
-    if isempty(rule)
-        println("Debug: Rule is empty. Fitness = 0.0")
+    if length(solution) != expected_length
+        error("Invalid solution length. Expected $expected_length, got $(length(solution)).")
+    end
+
+    println("Calling build_rule with solution of length $(length(solution)) and features of size $(length(features))")
+    rules = build_rule(solution, features)
+
+    if isempty(rules)
+        println("No rules generated; fitness = 0.0")
         return 0.0
     end
 
-    cut = calculate_cut_point(cut_point_val, length(rule))
-    antecedent = rule[1:cut]
-    consequent = rule[cut+1:end]
+    cut_point_val = solution[end - 2]
+    cut_point = Int(round(cut_point_val * length(rules)))
+    cut_point = clamp(cut_point, 1, length(rules) - 1)
+
+    antecedent = rules[1:cut_point]
+    consequent = rules[cut_point + 1:end]
 
     if isempty(antecedent) || isempty(consequent)
-        println("Debug: Antecedent or consequent is empty.")
+        println("Invalid antecedent or consequent; fitness = 0.0")
         return 0.0
     end
 
-    total_support = support(problem.features, antecedent)
-    total_confidence = confidence(problem.features, antecedent, consequent)
+    total_support = support(features, antecedent)
+    total_confidence = confidence(features, antecedent, consequent)
 
-    fitness = (support_weight * total_support) + (confidence_weight * total_confidence)
-    println("Debug: Total Support = ", total_support)
-    println("Debug: Total Confidence = ", total_confidence)
-    println("Debug: Fitness = ", fitness)
+    fitness = total_support + total_confidence
+    println("Fitness calculated: $fitness")
     return fitness
-end
-
-function calculate_cut_point(cut_value::Float64, num_features::Int)::Int
-    cut = Int(floor(cut_value * num_features))
-    return clamp(cut, 1, num_features - 1)
 end

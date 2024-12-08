@@ -14,8 +14,8 @@ export read_tcx_gps_points, create_property_graph, find_overlapping_segments_acr
        custom_atan2, haversine_distance, compute_segment_characteristics_basic, get_absolute_path,
        get_tcx_files_from_directory, find_path_between_segments, euclidean_distance, get_feature_stats,
        compute_segment_variability, extract_segment_features, build_rule, feature_position, calculate_border,
-       calculate_selected_category, add_attribute, pso, de, fitness_function, support, confidence, normalize_features,
-       filter_features, initpopulation, terminate
+       calculate_selected_category, add_attribute, fitness_function, support, confidence, normalize_features,
+       filter_features, prepare_problem, run_pso, run_de, count_sub_features
 
 include("TCXParser.jl")
 include("GraphBuilder.jl")
@@ -27,7 +27,7 @@ include("SegmentAnalysis.jl")
 include("PathFinder.jl")
 include("RuleUtils.jl")
 include("Metrics.jl")
-include("EvolutionaryAlgorithms.jl")
+include("EAFacade.jl")
 include("Optimization.jl")
 
 end
