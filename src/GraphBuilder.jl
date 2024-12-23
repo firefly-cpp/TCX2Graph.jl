@@ -25,13 +25,13 @@ consecutive GPS points within each TCX file. The function also returns a diction
 and a vector representing the vertex ranges for each path (i.e., each TCX file).
 
 """
-function create_property_graph(tcx_files::Vector{String})
+function create_property_graph(tcx_files::Vector{String}, add_features::Bool=false, batch_size::Int=10)
     graph = SimpleGraph()
     all_gps_data = Dict{Int, Dict{String, Any}}()  # Stores properties for each vertex
     paths = Vector{UnitRange{Int64}}()  # Stores ranges of vertices for each TCX file
 
     for (index, tcx_file_path) in enumerate(tcx_files)
-        gps_points = read_tcx_gps_points(tcx_file_path)
+        gps_points = read_tcx_gps_points(tcx_file_path, add_features, batch_size)
 
         start_index = nv(graph) + 1
         add_vertices!(graph, length(gps_points))
