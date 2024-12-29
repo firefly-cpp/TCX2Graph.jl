@@ -29,7 +29,7 @@ function main()
     end
 
     # Create property graph and KDTree
-    graph, gps_data, paths = TCX2Graph.create_property_graph(tcx_files, true, 20)
+    graph, gps_data, paths = TCX2Graph.create_property_graph(tcx_files, true)
     kdtree = TCX2Graph.create_kdtree_index(gps_data)
 
     # Find overlapping segments across multiple paths
