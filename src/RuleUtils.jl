@@ -1,161 +1,100 @@
-"""
-    build_rule(solution::Vector{Float64}, features::Dict{String, Dict{String, Any}}; is_time_series::Bool=false)
+using JSON3
 
-Builds rules for cycling paths based on a solution vector and feature metadata.
+function build_rule(solution::Vector{Float64}, features::Vector{Dict{String, Any}})
+    println("Entered build_rule")
 
-# Arguments
-- `solution::Vector{Float64}`: A vector containing thresholds and permutations for path segments.
-- `features::Dict{String, Dict{String, Any}}`: A dictionary where keys are feature names, and values are metadata (e.g., type, range).
-- `is_time_series::Bool=false`: Indicates whether the data contains time-dependent features.
+    num_features = count_sub_features(features)
+    expected_solution_length = 4 * num_features + num_features + 3
 
-# Returns
-A vector of constructed attributes (rules), where each attribute describes a constraint or property of a feature.
-"""
-function build_rule(solution::Vector{Float64}, features::Dict{String, Dict{String, Any}}; is_time_series::Bool=false)
-    is_first_attribute = true
-    attributes = []
-
-    num_features = length(features)
-    len_solution = length(solution)
-
-    if len_solution < num_features
-        error("Solution length is smaller than the number of features.")
+    if length(solution) != expected_solution_length
+        error("Solution vector length mismatch. Expected: $expected_solution_length, Actual: $(length(solution))")
     end
 
-    # Separate solution into two parts: thresholds and permutations
-    permutation_part = solution[end-num_features+1:end]
-    solution_part = solution[1:end-num_features]
+    rule_part = solution[1:4 * num_features]
+    permutation_part = solution[4 * num_features + 1:4 * num_features + num_features]
+    reserved_metadata = solution[end - 2:end]
 
-    # Sort features by descending order of permutation values
+    if length(permutation_part) != num_features
+        error("Permutation part length mismatch. Expected: $num_features, Actual: $(length(permutation_part))")
+    end
+
     permutation_indices = sortperm(permutation_part, rev=true)
 
-    # Iterate over features in sorted order
-    for i in permutation_indices
-        feature_name = keys(features)[i]  # Extract feature name
-        feature_meta = features[feature_name]  # Metadata for this feature
-        feature_type = feature_meta["type"]  # Type: "Numerical" or "Categorical"
+    println("Solution vector length: $(length(solution))")
+    println("num_features: $num_features")
+    println("rule_part length: $(length(rule_part))")
+    println("permutation_part length: $(length(permutation_part))")
+    println("Permutation indices: $permutation_indices")
 
-        # Determine positions for thresholds in the solution vector
-        vector_position = feature_position(features, feature_name)
-        threshold_position = vector_position + (feature_type == "Numerical" ? 2 : 1)
+    rules = Vector{Dict{String, Any}}()
+    sub_feature_index = 1
 
-        # Check if feature threshold condition is met
-        if solution_part[vector_position] > solution_part[threshold_position]
-            if feature_type != "Categorical"
-                # Numerical feature: Calculate threshold values
-                border1 = round(calculate_border(feature_meta, solution_part[vector_position]), digits=4)
-                border2 = round(calculate_border(feature_meta, solution_part[vector_position + 1]), digits=4)
-                if border1 > border2
-                    border1, border2 = border2, border1
-                end
-
-                # Add numerical feature to rule attributes
-                if is_first_attribute
-                    attributes = add_attribute([], feature_name, feature_type, border1, border2, "EMPTY")
-                    is_first_attribute = false
-                else
-                    attributes = add_attribute(attributes, feature_name, feature_type, border1, border2, "EMPTY")
-                end
-            else
-                # Categorical feature: Select category
-                categories = feature_meta["categories"]
-                selected_category = calculate_selected_category(solution_part[vector_position], length(categories))
-
-                # Add categorical feature to rule attributes
-                if is_first_attribute
-                    attributes = add_attribute([], feature_name, feature_type, 1.0, 1.0, categories[selected_category])
-                    is_first_attribute = false
-                else
-                    attributes = add_attribute(attributes, feature_name, feature_type, 1.0, 1.0, categories[selected_category])
-                end
+    for feature in features
+        for sub_feature_name in keys(feature)
+            if sub_feature_name in ["start_idx", "end_idx"]
+                continue
             end
+
+            feature_meta = feature[sub_feature_name]
+            feature_min = feature_meta["min"]
+            feature_max = feature_meta["max"]
+
+            if feature_min === missing || feature_max === missing || feature_min == feature_max
+                println("Skipping sub-feature $sub_feature_name: invalid min/max values.")
+                continue
+            end
+
+            idx_base = (sub_feature_index - 1) * 4 + 1
+            if idx_base + 3 > length(rule_part)
+                error("Rule part access out of bounds: [$idx_base, $(idx_base + 3)]. Rule part length: $(length(rule_part))")
+            end
+
+            println("Processing feature $sub_feature_name with idx_base: $idx_base")
+
+            border1 = feature_min + (feature_max - feature_min) * rule_part[idx_base]
+            border2 = feature_min + (feature_max - feature_min) * rule_part[idx_base + 1]
+            threshold = rule_part[idx_base + 2]
+            avg_weight = rule_part[idx_base + 3]
+
+            if abs(border2 - border1) > 1e-2
+                rules = add_attribute(
+                    rules, sub_feature_name, feature_meta["type"],
+                    min(border1, border2), max(border1, border2), threshold, avg_weight
+                )
+                println("Generated rule: $(rules[end])")
+            else
+                println("Skipping sub-feature $sub_feature_name: borders too close.")
+            end
+
+            sub_feature_index += 1
         end
     end
 
-    return attributes
-end
+    export_data = Dict(
+        "solution_vector" => solution,
+        "features" => features,
+        "rules" => rules,
+        "reserved_metadata" => reserved_metadata
+    )
 
-"""
-    feature_position(features::Dict{String, Dict{String, Any}}, feature_name::String)
-
-Finds the position of a feature in the solution vector based on its type.
-
-# Arguments
-- `features::Dict{String, Dict{String, Any}}`: Metadata about all features.
-- `feature_name::String`: The name of the feature.
-
-# Returns
-The starting position of the feature in the solution vector.
-"""
-function feature_position(features::Dict{String, Dict{String, Any}}, feature_name::String)
-    position = 0
-    for (name, meta) in features
-        if name == feature_name
-            break
-        end
-        position += meta["type"] == "Categorical" ? 2 : 3
+    open("debug_rules.json", "w") do io
+        write(io, JSON3.write(export_data, pretty=true))
     end
-    return position
+    println("Debug information exported to debug_rules.json")
+
+    return rules
 end
 
-"""
-    calculate_border(feature_meta::Dict{String, Any}, value::Float64)
-
-Calculates the threshold (border) for a numerical feature based on its range.
-
-# Arguments
-- `feature_meta::Dict{String, Any}`: Metadata about the feature (including `min` and `max` values).
-- `value::Float64`: The value to map to the feature's range.
-
-# Returns
-The calculated threshold value.
-"""
-function calculate_border(feature_meta::Dict{String, Any}, value::Float64)
-    feature_min = feature_meta["min"]
-    feature_max = feature_meta["max"]
-    return feature_min + (feature_max - feature_min) * value
-end
-
-"""
-    calculate_selected_category(value::Float64, num_categories::Int)
-
-Determines the index of the selected category based on the solution vector value.
-
-# Arguments
-- `value::Float64`: The encoded value representing a category.
-- `num_categories::Int`: The number of available categories.
-
-# Returns
-The index of the selected category.
-"""
-function calculate_selected_category(value::Float64, num_categories::Int)
-    return Int(floor(value * (num_categories - 1)))
-end
-
-"""
-    add_attribute(attributes::Vector{Dict{String, Any}}, feature_name::String, feature_type::String, border1::Float64, border2::Float64, category::String)
-
-Adds a new attribute to the rule being constructed.
-
-# Argument0s
-- `attributes::Vector{Dict{String, Any}}`: The list of attributes constructed so far.
-- `feature_name::String`: The name of the feature.
-- `feature_type::String`: The type of the feature (e.g., "Numerical" or "Categorical").
-- `border1::Float64`: Lower bound for numerical features (or 1.0 for categorical).
-- `border2::Float64`: Upper bound for numerical features (or 1.0 for categorical).
-- `category::String`: The selected category for categorical features (or "EMPTY" for numerical).
-
-# Returns
-The updated list of attributes.
-"""
-function add_attribute(attributes::Vector{Dict{String, Any}}, feature_name::String, feature_type::String, border1::Float64, border2::Float64, category::String)
-    attribute = Dict(
+function add_attribute(rules::Vector{Dict{String, Any}}, feature_name::String, feature_type::String, border1::Float64, border2::Float64, threshold::Float64, avg::Float64)
+    rule = Dict(
         "feature" => feature_name,
         "type" => feature_type,
         "border1" => border1,
         "border2" => border2,
-        "category" => category
+        "threshold" => threshold,
+        "avg" => avg
     )
-    push!(attributes, attribute)
-    return attributes
+    push!(rules, rule)
+    return rules
 end
+
