@@ -145,3 +145,54 @@ function count_sub_features(features::Vector{Dict{String, Any}})::Int
     println("Total valid sub-features (numerical only): $total_sub_features")
     return total_sub_features
 end
+
+"""
+    douglas_peucker(points::Vector{Tuple{Float64, Float64}}, epsilon::Float64) -> Vector{Tuple{Float64, Float64}}
+
+Reduces the number of points in a polyline using the Douglas-Peucker algorithm.
+
+# Arguments
+- `points::Vector{Tuple{Float64, Float64}}`: A vector of 2D points represented as tuples (x, y).
+- `epsilon::Float64`: The maximum distance threshold for simplification.
+
+# Returns
+- `Vector{Tuple{Float64, Float64}}`: A simplified vector of 2D points.
+
+# Details
+
+The Douglas-Peucker algorithm simplifies a polyline by recursively dividing it into smaller segments. The algorithm starts with the two endpoints of the polyline and finds the point
+farthest from the line segment connecting them. If this point is farther than `epsilon` from the line, the polyline is split at this point, and the algorithm is applied recursively to the
+two resulting segments. If the point is within `epsilon`, the line segment is approximated by the two endpoints. The process continues until no points exceed the threshold distance.
+"""
+function douglas_peucker(points::Vector{Tuple{Float64, Float64}}, epsilon::Float64)::Vector{Tuple{Float64, Float64}}
+    if length(points) < 3
+        return points
+    end
+
+    function perpendicular_distance(point, line_start, line_end)
+        x0, y0 = point
+        x1, y1 = line_start
+        x2, y2 = line_end
+        num = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+        den = sqrt((y2 - y1)^2 + (x2 - x1)^2)
+        return num / den
+    end
+
+    max_distance, index = 0.0, 0
+    for i in 2:length(points)-1
+        dist = perpendicular_distance(points[i], points[1], points[end])
+        if dist > max_distance
+            max_distance, index = dist, i
+        end
+    end
+
+    if max_distance > epsilon
+        left_simplified = douglas_peucker(points[1:index], epsilon)
+        right_simplified = douglas_peucker(points[index:end], epsilon)
+
+        return vcat(left_simplified[1:end-1], right_simplified)
+    else
+        return [points[1], points[end]]
+    end
+end
+
