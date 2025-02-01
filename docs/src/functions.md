@@ -50,6 +50,30 @@ Calculates the Euclidean distance between two points specified by their latitude
 #### `TCX2Graph.find_path_between_segments(gps_data::Dict{Int64, Dict{String, Any}}, start_idx::Int, end_idx::Int, tolerance::Float64) -> Vector{Dict{String, Any}}`
 Finds the path between two segments based on the GPS data and tolerance.
 
+#### `TCX2Graph.filter_features(features::Vector{Dict{String, Any}}, tolerance::Float64) -> Vector{Dict{String, Any}}`
+Filters road features based on the provided tolerance.
+
+#### `TCX2Graph.douglas_peucker(points::Vector{Dict{String, Any}}, epsilon::Float64) -> Vector{Dict{String, Any}}`
+Simplifies a polyline using the Douglas-Peucker algorithm.
+
+#### `TCX2Graph.extract_segment_features(gps_data::Dict{Int64, Dict{String, Any}}, segment::Dict{String, Any}, tolerance::Float64) -> Vector{Dict{String, Any}}`
+Extracts road features for a segment based on the GPS data and tolerance.
+
+#### `TCX2Graph.get_feature_stats(features::Vector{Dict{String, Any}}) -> Dict{String, Any}`
+Computes statistics for the provided road features.
+
+#### `TCX2Graph.find_closest_road_features(gps_data::Dict{Int64, Dict{String, Any}}, segment::Dict{String, Any}, tolerance::Float64) -> Vector{Dict{String, Any}}`
+Finds the closest road features for a segment based on the GPS data and tolerance.
+
+#### `TCX2Graph.assign_road_features!(gps_data::Dict{Int64, Dict{String, Any}}, tolerance::Float64)`
+Assigns road features to the GPS data based on the provided tolerance.
+
+#### `TCX2Graph.create_proper_polyline(polyline::Vector{Dict{String, Any}}) -> Vector{Dict{String, Any}}`
+Creates a proper polyline from the provided data.
+
+#### `TCX2Graph.query_overpass_polyline(polyline::Vector{Dict{String, Any}}) -> Vector{Dict{String, Any}}`
+Queries Overpass API for road features along the provided polyline.
+
 # Functions Documentation
 
 ```@docs
@@ -69,4 +93,12 @@ TCX2Graph.create_kdtree_index
 TCX2Graph.gps_to_point
 TCX2Graph.euclidean_distance
 TCX2Graph.find_path_between_segments
+TCX2Graph.filter_features
+TCX2Graph.douglas_peucker
+TCX2Graph.extract_segment_features
+TCX2Graph.get_feature_stats
+TCX2Graph.find_closest_road_features
+TCX2Graph.assign_road_features!
+TCX2Graph.create_proper_polyline
+TCX2Graph.query_overpass_polyline
 ```

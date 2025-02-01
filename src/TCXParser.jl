@@ -3,7 +3,7 @@ using Overpass
 using JSON
 
 # Set your Overpass endpoint to your local instance
-Overpass.set_endpoint("http://localhost:12345/api/interpreter")
+Overpass.set_endpoint("http://164.8.251.70:12345/api/")
 
 """
     read_tcx_gps_points(tcx_file_path::String, add_features::Bool) -> Vector{Dict{String, Any}}
@@ -27,6 +27,15 @@ Optionally queries Overpass for additional road surface information in batches.
     - `speed`: Speed in meters per second (if available, otherwise `missing`).
     - `watts`: Power output in watts (if available, otherwise `missing`).
     - `surface`: The type of surface (if queried from Overpass, otherwise `missing`).
+    - `smoothness`: The smoothness of the surface (if queried from Overpass, otherwise `missing`).
+    - `width`: The width of the road (if queried from Overpass, otherwise `missing`).
+    - `lit`: Whether the road is lit (if queried from Overpass, otherwise `missing`).
+    - `maxspeed`: The maximum speed limit (if queried from Overpass, otherwise `missing`).
+    - `incline`: The incline of the road (if queried from Overpass, otherwise `missing`).
+    - `barrier`: The type of barrier on the road (if queried from Overpass, otherwise `missing`).
+    - `crossing`: The type of crossing on the road (if queried from Overpass, otherwise `missing`).
+    - `landuse`: The land use type (if queried from Overpass, otherwise `missing`).
+    - `lane_markings`: The type of lane markings (if queried from Overpass, otherwise `missing`).
 
 # Details
 This function processes the given TCX file by extracting relevant data from each GPS trackpoint. If specific properties (such as altitude, heart rate, or power) are not available for a given trackpoint, they are marked as `missing`. The result is a vector of dictionaries, where each dictionary represents a single trackpoint with its associated properties.
@@ -60,10 +69,22 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
     end
 
     if add_features
-        add_surface_info!(trackpoints)
+        assign_road_features!(trackpoints, query_overpass_polyline(create_proper_polyline(trackpoints)))
     else
         for tp in trackpoints
-            tp["surface"] = missing
+          tp["highway"] = missing
+          tp["cycleway"] = missing
+          tp["bicycle"] = missing
+          tp["surface"] = missing
+          tp["smoothness"] = missing
+          tp["width"] = missing
+          tp["lit"] = missing
+          tp["maxspeed"] = missing
+          tp["incline"] = missing
+          tp["barrier"] = missing
+          tp["crossing"] = missing
+          tp["landuse"] = missing
+          tp["lane_markings"] = missing
         end
     end
 
@@ -81,37 +102,24 @@ function get_or_missing(value)
 end
 
 """
-    add_surface_info!(trackpoints::Vector{Dict{String, Any}})
+    create_proper_polyline(trackpoints::Vector{Dict{String, Any}}, epsilon::Float64 = 0.0001) -> String
 
-Adds surface information to trackpoints using Overpass API queries.
+Creates a proper polyline from trackpoints and simplifies it using the Douglas-Peucker algorithm.
+
+# Arguments
+- `trackpoints::Vector{Dict{String, Any}}`: A vector of trackpoints.
+- `epsilon::Float64`: The epsilon value for the Douglas-Peucker algorithm.
+
+# Returns
+- `String`: A string representation of the simplified polyline.
 """
-function add_surface_info!(trackpoints::Vector{Dict{String, Any}})
-    # Create a single polyline for all trackpoints
-    polyline = create_proper_polyline(trackpoints)
+function create_proper_polyline(trackpoints::Vector{Dict{String, Any}}, epsilon::Float64 = 0.0001)::String
 
-    # Query Overpass for all trackpoints
-    overpass_result = query_overpass_polyline(polyline)
-
-    # Assign surfaces to trackpoints
-    assign_surfaces!(trackpoints, overpass_result)
-end
-
-"""
-    create_proper_polyline(trackpoints::Vector{Dict{String, Any}}) -> String
-
-Creates a properly formatted polyline string for Overpass API from trackpoints.
-"""
-function create_proper_polyline(trackpoints::Vector{Dict{String, Any}})::String
-    # Format as: lat1 lon1 lat2 lon2 ...
     coords = [(tp["latitude"], tp["longitude"]) for tp in trackpoints]
 
-    # Ensure at least three points to form a valid polygon
-    if length(coords) < 3
-        error("Overpass requires at least three distinct points to form a valid polygon.")
-    end
+    simplified_coords = douglas_peucker(coords, epsilon)
 
-    # Join points into a poly string
-    return join(["$(lat) $(lon)" for (lat, lon) in coords], " ")
+    return join(["$(lat) $(lon)" for (lat, lon) in simplified_coords], " ")
 end
 
 """
@@ -122,13 +130,24 @@ Queries the Overpass API with the given polyline and returns the result.
 function query_overpass_polyline(polyline::String)
     try
         query = """
-        [out:json];
+        [out:json][timeout:90];
         (
             way["highway"](poly:"$polyline");
+            way["cycleway"](poly:"$polyline");
+            way["bicycle"](poly:"$polyline");
+            way["surface"](poly:"$polyline");
+            way["smoothness"](poly:"$polyline");
+            way["width"](poly:"$polyline");
+            way["lit"](poly:"$polyline");
+            way["maxspeed"](poly:"$polyline");
+            way["incline"](poly:"$polyline");
+            way["barrier"](poly:"$polyline");
+            way["crossing"](poly:"$polyline");
+            way["landuse"](poly:"$polyline");
+            way["lane_markings"](poly:"$polyline");
         );
         out geom;
         """
-        #println("Generated Overpass Query:\n$query")
         response = Overpass.query(query)
         parsed_response = JSON.parse(response)
         return parsed_response["elements"]
@@ -139,50 +158,81 @@ function query_overpass_polyline(polyline::String)
 end
 
 """
-    assign_surfaces!(trackpoints::Vector{Dict{String, Any}}, overpass_result::Vector{Any})
+    assign_road_features!(trackpoints::Vector{Dict{String, Any}}, overpass_result::Vector{Any})
 
-Assigns surface types from Overpass results to trackpoints.
+Assigns road features from the Overpass result to the trackpoints.
 """
-function assign_surfaces!(trackpoints::Vector{Dict{String, Any}}, overpass_result::Vector{Any})
+function assign_road_features!(trackpoints::Vector{Dict{String, Any}}, overpass_result::Vector{Any})
     for tp in trackpoints
         lat, lon = tp["latitude"], tp["longitude"]
-        tp["surface"] = find_closest_surface(lat, lon, overpass_result)
+
+        closest_features = find_closest_road_features(lat, lon, overpass_result)
+
+        for key in keys(closest_features)
+            tp[key] = closest_features[key]
+        end
     end
 end
 
 """
-    find_closest_surface(lat::Float64, lon::Float64, elements::Vector{Any}) -> Union{String, Missing}
+    find_closest_road_features(lat::Float64, lon::Float64, elements::Vector{Any})::Dict{String, Union{String, Missing}}
 
-Finds the closest surface tag in Overpass results to the given coordinates.
+Finds the closest road features to a given latitude and longitude from a list of Overpass elements.
+
+# Arguments
+- `lat::Float64`: The latitude of the point.
+- `lon::Float64`: The longitude of the point.
+- `elements::Vector{Any}`: A list of Overpass elements containing road features.
+
+# Returns
+- `Dict{String, Union{String, Missing}}`: A dictionary containing the closest road features to the given point.
 """
-function find_closest_surface(lat::Float64, lon::Float64, elements::Vector{Any})::Union{String, Missing}
-    closest_surface = missing
+function find_closest_road_features(lat::Float64, lon::Float64, elements::Vector{Any})::Dict{String, Union{String, Missing, Float64}}
+    closest_features = Dict{String, Union{String, Missing, Float64}}(
+        "highway" => missing,
+        "cycleway" => missing,
+        "bicycle" => missing,
+        "surface" => missing,
+        "smoothness" => missing,
+        "width" => missing,
+        "lit" => missing,
+        "maxspeed" => missing,
+        "incline" => missing,
+        "barrier" => missing,
+        "crossing" => missing,
+        "landuse" => missing,
+        "lane_markings" => missing
+    )
     closest_distance = Inf
 
     for element in elements
-        if haskey(element, "tags") && haskey(element["tags"], "surface")
-            # Try "bounds" first
-            if haskey(element, "bounds")
-                bbox = element["bounds"]
-                distance = haversine_distance(lat, lon, bbox["minlat"], bbox["minlon"])
-                if distance < closest_distance
-                    closest_distance = distance
-                    closest_surface = element["tags"]["surface"]
-                end
-            elseif haskey(element, "geometry")
-                # Use geometry nodes if available
-                for node in element["geometry"]
-                    node_distance = haversine_distance(lat, lon, node["lat"], node["lon"])
-                    if node_distance < closest_distance
-                        closest_distance = node_distance
-                        closest_surface = element["tags"]["surface"]
+        if haskey(element, "tags") && haskey(element, "geometry")
+            for node in element["geometry"]
+                node_distance = haversine_distance(lat, lon, node["lat"], node["lon"])
+
+                if node_distance < closest_distance
+                    closest_distance = node_distance
+
+                    for key in keys(closest_features)
+                        if haskey(element["tags"], key)
+                            value = element["tags"][key]
+
+                            if key in ["width", "maxspeed", "incline"]
+                                try
+                                    closest_features[key] = parse(Float64, value)
+                                catch
+                                    closest_features[key] = value
+                                end
+                            else
+                                closest_features[key] = value
+                            end
+                        end
                     end
                 end
-            else
-                println("No usable geometry for element: ", element)
             end
         end
     end
 
-    return closest_surface
+    return closest_features
 end
+
