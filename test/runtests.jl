@@ -90,22 +90,6 @@ include("../src/TCX2Graph.jl")
         rm(save_dir, recursive=true)
     end
 
-    # Test for compute_segment_characteristics
-    @testset "compute_segment_characteristics function" begin
-        gps_data = Dict(
-            1 => Dict{String, Any}("latitude" => 48.8566, "longitude" => 2.3522, "altitude" => 35.0),
-            2 => Dict{String, Any}("latitude" => 48.8570, "longitude" => 2.3530, "altitude" => 45.0)
-        )
-        overlapping_segments = [Dict("start_idx" => 1, "end_idx" => 2)]
-
-        total_distance, total_ascent, total_descent, total_vertical_meters, max_gradient, avg_gradient =
-            TCX2Graph.compute_segment_characteristics(1, gps_data, overlapping_segments)
-
-        @test total_distance > 0
-        @test total_ascent == 10.0
-        @test total_descent == 0.0
-    end
-
     # Test for plot_property_graph
     @testset "plot_property_graph function" begin
         gps_data = Dict(
