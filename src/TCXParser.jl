@@ -3,7 +3,7 @@ using Overpass
 using JSON
 
 # Set your Overpass endpoint to your local instance
-Overpass.set_endpoint("http://164.8.251.70:12345/api/")
+Overpass.set_endpoint("http://localhost:12345/api/")
 
 """
     read_tcx_gps_points(tcx_file_path::String, add_features::Bool) -> Vector{Dict{String, Any}}
@@ -52,8 +52,8 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
             for trackpoint in lap.trackPoints
                 if !isnothing(trackpoint.latitude) && !isnothing(trackpoint.longitude)
                     properties = Dict(
-                        "latitude" => trackpoint.latitude,
-                        "longitude" => trackpoint.longitude,
+                        "latitude" => get_or_missing(trackpoint.latitude),
+                        "longitude" => get_or_missing(trackpoint.longitude),
                         "time" => trackpoint.time,
                         "altitude" => get_or_missing(trackpoint.altitude_meters),
                         "distance" => get_or_missing(trackpoint.distance_meters),
@@ -68,8 +68,14 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
         end
     end
 
+    polyline = create_proper_polyline(trackpoints)
+    if isnothing(polyline)
+        println("Skipping TCX file $tcx_file_path: No valid GPS points.")
+        return nothing  # Return an empty array to signal skipping this file
+    end
+
     if add_features
-        assign_road_features!(trackpoints, query_overpass_polyline(create_proper_polyline(trackpoints)))
+        assign_road_features!(trackpoints, query_overpass_polyline(polyline))
     else
         for tp in trackpoints
           tp["highway"] = missing
@@ -88,7 +94,6 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
         end
     end
 
-    # Print enriched trackpoints (first 5 for brevity)
     println("First 5 enriched trackpoints:")
     for tp in trackpoints[1:min(5, length(trackpoints))]
         println(tp)
@@ -113,9 +118,15 @@ Creates a proper polyline from trackpoints and simplifies it using the Douglas-P
 # Returns
 - `String`: A string representation of the simplified polyline.
 """
-function create_proper_polyline(trackpoints::Vector{Dict{String, Any}}, epsilon::Float64 = 0.0001)::String
+function create_proper_polyline(trackpoints::Vector{Dict{String, Any}}, epsilon::Float64 = 0.001)::String
 
-    coords = [(tp["latitude"], tp["longitude"]) for tp in trackpoints]
+    coords = [(tp["latitude"], tp["longitude"]) for tp in trackpoints
+                  if !(ismissing(tp["latitude"]) || ismissing(tp["longitude"]))]
+
+    if length(coords) < 2
+        println("Skipping TCX file: Not enough valid coordinates for Douglas-Peucker simplification.")
+        return ""
+    end
 
     simplified_coords = douglas_peucker(coords, epsilon)
 
@@ -164,6 +175,11 @@ Assigns road features from the Overpass result to the trackpoints.
 """
 function assign_road_features!(trackpoints::Vector{Dict{String, Any}}, overpass_result::Vector{Any})
     for tp in trackpoints
+
+        if ismissing(tp["latitude"]) || ismissing(tp["longitude"])
+            continue
+        end
+
         lat, lon = tp["latitude"], tp["longitude"]
 
         closest_features = find_closest_road_features(lat, lon, overpass_result)

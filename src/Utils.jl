@@ -195,4 +195,3 @@ function douglas_peucker(points::Vector{Tuple{Float64, Float64}}, epsilon::Float
         return [points[1], points[end]]
     end
 end
-

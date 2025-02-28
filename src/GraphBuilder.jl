@@ -33,6 +33,12 @@ function create_property_graph(tcx_files::Vector{String}, add_features::Bool=fal
     for (index, tcx_file_path) in enumerate(tcx_files)
         gps_points = read_tcx_gps_points(tcx_file_path, add_features)
 
+        # Skip file if it returned nothing (i.e., no valid GPS data)
+        if isnothing(gps_points)
+            println("Skipping file: $tcx_file_path (No valid trackpoints).")
+            continue  # Move to the next file
+        end
+
         start_index = nv(graph) + 1
         add_vertices!(graph, length(gps_points))
         for i in 1:length(gps_points) - 1
