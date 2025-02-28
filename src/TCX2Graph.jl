@@ -9,25 +9,14 @@ The `TCX2Graph` module simplifies the analysis of cycling data from TCX files by
 """
 module TCX2Graph
 
-export read_tcx_gps_points, create_property_graph, find_overlapping_segments_across_paths,
-       plot_property_graph, round_coord, create_kdtree_index, plot_individual_overlapping_segments,
-       custom_atan2, haversine_distance, compute_segment_characteristics_basic, get_absolute_path,
-       get_tcx_files_from_directory, find_path_between_segments, euclidean_distance, get_feature_stats,
-       compute_segment_variability, extract_segment_features, build_rule, feature_position, calculate_border,
-       calculate_selected_category, add_attribute, fitness_function, support, confidence, normalize_features,
-       filter_features, prepare_problem, run_pso, run_de, count_sub_features
-
 include("TCXParser.jl")
 include("GraphBuilder.jl")
-include("KDTreeUtils.jl")
+include("OverlappingSegmentsUtils.jl")
 include("Visualizer.jl")
 include("Utils.jl")
 include("SegmentVisualizer.jl")
 include("SegmentAnalysis.jl")
 include("PathFinder.jl")
-include("RuleUtils.jl")
-include("Metrics.jl")
-include("EAFacade.jl")
-include("Optimization.jl")
+include("SegmentRuns.jl")
 
 end

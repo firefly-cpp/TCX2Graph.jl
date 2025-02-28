@@ -1,3 +1,9 @@
+using NearestNeighbors
+using StaticArrays
+using LinearAlgebra
+
+export round_coord, custom_atan2, haversine_distance, get_absolute_path, get_tcx_files_from_directory, euclidean_distance, douglas_peucker, get_ref_ride_idx_by_filename, gps_to_point, create_kdtree_index, create_ride_kdtree, haversine_distance_segment, discrete_frechet, cumulative_distances, is_same_location
+
 """
     round_coord(coord::Float64, decimals::Int) -> Float64
 
@@ -129,23 +135,6 @@ function euclidean_distance(point1, point2) :: Float64
     return norm(SVector(point1...) - SVector(point2...))
 end
 
-function count_sub_features(features::Vector{Dict{String, Any}})::Int
-    total_sub_features = 0
-    for feature in features
-        for (key, value) in feature
-            if key in ["start_idx", "end_idx"]
-                continue
-            end
-
-            if value isa Dict && all(σ -> haskey(value, σ), ["min", "max", "avg"])
-                total_sub_features += 1
-            end
-        end
-    end
-    println("Total valid sub-features (numerical only): $total_sub_features")
-    return total_sub_features
-end
-
 """
     douglas_peucker(points::Vector{Tuple{Float64, Float64}}, epsilon::Float64) -> Vector{Tuple{Float64, Float64}}
 
@@ -194,5 +183,86 @@ function douglas_peucker(points::Vector{Tuple{Float64, Float64}}, epsilon::Float
     else
         return [points[1], points[end]]
     end
+end
+
+"""
+    get_ref_ride_idx_by_filename(paths::Vector{UnitRange{Int64}},
+                                 paths_files::Dict{UnitRange{Int64}, String},
+                                 target_filename::String) -> Int
+
+Given the list of rides (`paths`) and the dictionary `paths_files` (which maps each ride range to its TCX file path),
+returns the index (in `paths`) of the ride whose file’s basename matches `target_filename`.
+"""
+function get_ref_ride_idx_by_filename(paths::Vector{UnitRange{Int64}},
+                                      paths_files::Dict{UnitRange{Int64}, String},
+                                      target_filename::String)
+    target_basename = basename(target_filename)
+    for (i, ride_range) in enumerate(paths)
+        if haskey(paths_files, ride_range)
+            file_basename = basename(paths_files[ride_range])
+            if file_basename == target_basename
+                return i
+            end
+        end
+    end
+    error("No ride with file name '$target_filename' found.")
+end
+
+# Convert a GPS dictionary to an SVector (longitude, latitude)
+function gps_to_point(gps::Dict{String,Any})
+    return SVector(gps["longitude"], gps["latitude"])
+end
+
+# Build a KDTree from all GPS data (provided for completeness)
+function create_kdtree_index(all_gps_data::Dict{Int,Dict{String,Any}})
+    points = [gps_to_point(gps) for gps in values(all_gps_data)]
+    return KDTree(points)
+end
+
+# Build a KDTree for a single ride (keeping the original global indices)
+function create_ride_kdtree(ride::UnitRange{Int64}, all_gps_data::Dict{Int,Dict{String,Any}})
+    pts = [gps_to_point(all_gps_data[i]) for i in ride]
+    return KDTree(pts), collect(ride)  # returns the tree and the corresponding global indices
+end
+
+# Discrete Fréchet distance between two polylines P and Q.
+# P and Q are vectors of SVector{2,Float64}; distances are computed using haversine_distance.
+function discrete_frechet(P::Vector{SVector{2,Float64}}, Q::Vector{SVector{2,Float64}})
+    n = length(P)
+    m = length(Q)
+    ca = fill(-1.0, n, m)
+    function c(i, j)
+        if ca[i,j] > -1
+            return ca[i,j]
+        elseif i == 1 && j == 1
+            ca[i,j] = haversine_distance(P[1][2], P[1][1], Q[1][2], Q[1][1])
+        elseif i == 1
+            ca[i,j] = max(c(1, j-1), haversine_distance(P[1][2], P[1][1], Q[j][2], Q[j][1]))
+        elseif j == 1
+            ca[i,j] = max(c(i-1, 1), haversine_distance(P[i][2], P[i][1], Q[1][2], Q[1][1]))
+        else
+            ca[i,j] = max(min(c(i-1, j), c(i-1, j-1), c(i, j-1)),
+                          haversine_distance(P[i][2], P[i][1], Q[j][2], Q[j][1]))
+        end
+        return ca[i,j]
+    end
+    return c(n, m)
+end
+
+# Compute cumulative arc-length (in meters) along a sequence of indices (from a ride)
+function cumulative_distances(ref_indices::Vector{Int}, all_gps_data::Dict{Int,Dict{String,Any}})
+    cum = [0.0]
+    for i in 2:length(ref_indices)
+        p1 = all_gps_data[ref_indices[i-1]]
+        p2 = all_gps_data[ref_indices[i]]
+        d = haversine_distance(p1["latitude"], p1["longitude"], p2["latitude"], p2["longitude"])
+        push!(cum, cum[end] + d)
+    end
+    return cum
+end
+
+# Simple location check (if needed)
+function is_same_location(gps1::Dict{String,Any}, gps2::Dict{String,Any}; tolerance=0.0015)
+    return norm(gps_to_point(gps1) - gps_to_point(gps2)) <= tolerance
 end
 

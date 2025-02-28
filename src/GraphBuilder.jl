@@ -1,5 +1,7 @@
 using Graphs
 
+export create_property_graph
+
 """
     create_property_graph(tcx_files::Vector{String})
     -> (SimpleGraph, Dict{Int, Dict{String, Any}}, Vector{UnitRange{Int64}})
@@ -29,10 +31,10 @@ function create_property_graph(tcx_files::Vector{String}, add_features::Bool=fal
     graph = SimpleGraph()
     all_gps_data = Dict{Int, Dict{String, Any}}()  # Stores properties for each vertex
     paths = Vector{UnitRange{Int64}}()  # Stores ranges of vertices for each TCX file
+    paths_files = Dict{UnitRange{Int64}, String}()
 
     for (index, tcx_file_path) in enumerate(tcx_files)
         gps_points = read_tcx_gps_points(tcx_file_path, add_features)
-
         start_index = nv(graph) + 1
         add_vertices!(graph, length(gps_points))
         for i in 1:length(gps_points) - 1
@@ -45,7 +47,8 @@ function create_property_graph(tcx_files::Vector{String}, add_features::Bool=fal
         end
 
         push!(paths, start_index:(start_index + length(gps_points) - 1))
+        paths_files[start_index:(start_index + length(gps_points) - 1)] = tcx_file_path
     end
 
-    return graph, all_gps_data, paths
+    return graph, all_gps_data, paths, paths_files
 end

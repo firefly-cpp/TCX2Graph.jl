@@ -1,5 +1,7 @@
 using Statistics
 
+export compute_segment_characteristics_basic, extract_segment_features, filter_features
+
 """
     compute_segment_characteristics_basic(segment_idx::Int, gps_data::Dict{Int, Dict{String, Any}},
                                     overlapping_segments::Vector{Dict{String, Any}})
@@ -105,7 +107,8 @@ function extract_segment_features(overlapping_segments::Vector{Dict{String, Any}
             "speed" => merge(get_feature_stats(trackpoints, "speed"), Dict("type" => "Numerical")),
             "heart_rate" => merge(get_feature_stats(trackpoints, "heart_rate"), Dict("type" => "Numerical")),
             "cadence" => merge(get_feature_stats(trackpoints, "cadence"), Dict("type" => "Numerical")),
-            "watts" => merge(get_feature_stats(trackpoints, "watts"), Dict("type" => "Numerical"))
+            "watts" => merge(get_feature_stats(trackpoints, "watts"), Dict("type" => "Numerical")),
+
         )
 
         # Combine features with segment info
