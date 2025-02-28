@@ -1,6 +1,7 @@
 include("../src/TCX2Graph.jl")
 using BenchmarkTools
 using Base.Threads
+using JSON
 
 # Check the number of threads available
 println("Number of threads: ", Threads.nthreads())
@@ -28,16 +29,38 @@ function main()
         end
     end
 
-    # Create property graph and KDTree
-    graph, gps_data, paths = TCX2Graph.create_property_graph(tcx_files, true)
-    kdtree = TCX2Graph.create_kdtree_index(gps_data)
+    # Create property graph
+    graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(tcx_files, false)
 
-    # Find overlapping segments across multiple paths
-    @time overlapping_segments = TCX2Graph.find_overlapping_segments_across_paths(gps_data, paths, kdtree, max_gap=0.0045, min_segment_length=3, segment_gap_tolerance=15)
-    println("Overlapping segments (KD-tree): ", length(overlapping_segments))
+    # Print all the paths_files
+    for (path, file) in paths_files
+        println("Path: $path, File: $file")
+    end
+
+    # choose the ride by filename.
+    target_file = "activity_12381259800.tcx"
+    ref_ride_idx = TCX2Graph.get_ref_ride_idx_by_filename(paths, paths_files, target_file)
+    println("Using ride index $ref_ride_idx corresponding to file $target_file")
+
+    @time overlapping_segments = TCX2Graph.find_overlapping_segments(
+        gps_data,
+        paths;
+        ref_ride_idx = ref_ride_idx,
+        max_length_m = 3000.0,
+        tol_m = 50.0,
+        window_step = 1,
+        min_runs = 3,
+        prefilter_margin_m = 100.0,
+        dedup_overlap_frac = 0.5
+    )
+
+    println("Found $(length(overlapping_segments)) overlapping segments.")
+    for seg in overlapping_segments
+        println(seg)
+    end
 
     # Plot individual overlapping segments
-    #TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./examples/")
+    TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./examples/")
     #TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "/Volumes/Arion/feri/tcx2graph/svtemp/")
 
     # Choose segment index for analysis
@@ -58,7 +81,7 @@ function main()
     #println("Visualization saved to: ", save_path)
 
     # Example of selecting start and end segments (use actual indices or logic as needed)
-    start_segment = overlapping_segments[7]  # Select your actual start segment
+    #= start_segment = overlapping_segments[7]  # Select your actual start segment
     end_segment = overlapping_segments[5]  # Select your actual end segment
 
     path_segments = []
@@ -87,30 +110,11 @@ function main()
     path_features = TCX2Graph.extract_segment_features(path_segments, gps_data)
     println("Extracting features for path segments...")
     filtered_features = TCX2Graph.filter_features(path_features)
-    println("Filtered features: ", filtered_features)
+    # println("Filtered features: ", filtered_features) =#
 
-    # Run PSO
-    best_fitness_pso = TCX2Graph.run_pso(
-        TCX2Graph.fitness_function,
-        filtered_features,
-        100;
-        popsize=20,
-        omega=0.7,
-        c1=2.0,
-        c2=2.0
-    )
-    println("Best PSO Fitness: ", best_fitness_pso)
-
-    # Run DE
-    best_fitness_de = TCX2Graph.run_de(
-        TCX2Graph.fitness_function,
-        filtered_features,
-        100;
-        popsize=50,
-        cr=0.8,
-        f=0.9
-    )
-    println("Best DE Fitness: ", best_fitness_de)
+    runs = TCX2Graph.extract_single_segment_runs(overlapping_segments[1], gps_data)
+    json_str = JSON.json(runs)
+    write("segment_runs.json", json_str)
 
 end
 

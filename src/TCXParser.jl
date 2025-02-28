@@ -2,8 +2,10 @@ using TCXReader
 using Overpass
 using JSON
 
+export read_tcx_gps_points, create_proper_polyline, query_overpass_polyline, assign_road_features!, find_closest_road_features
+
 # Set your Overpass endpoint to your local instance
-Overpass.set_endpoint("http://localhost:12345/api/")
+Overpass.set_endpoint("https://overpass-api.de/api/")
 
 """
     read_tcx_gps_points(tcx_file_path::String, add_features::Bool) -> Vector{Dict{String, Any}}
@@ -60,7 +62,8 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
                         "heart_rate" => get_or_missing(trackpoint.heart_rate_bpm),
                         "cadence" => get_or_missing(trackpoint.cadence),
                         "speed" => get_or_missing(trackpoint.speed),
-                        "watts" => get_or_missing(trackpoint.watts)
+                        "watts" => get_or_missing(trackpoint.watts),
+                        "file_name" => basename(tcx_file_path)
                     )
                     push!(trackpoints, properties)
                 end
@@ -94,10 +97,15 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
         end
     end
 
-    println("First 5 enriched trackpoints:")
+    # Print enriched trackpoints (first 5 for brevity)
+    #= println("First 5 enriched trackpoints:")
     for tp in trackpoints[1:min(5, length(trackpoints))]
         println(tp)
-    end
+    end =#
+
+    # Print just first 1 trackpoint
+    println("First trackpoint:")
+    println(trackpoints[1])
 
     return trackpoints
 end

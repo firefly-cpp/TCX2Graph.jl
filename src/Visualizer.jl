@@ -1,5 +1,7 @@
 using Plots
 
+export plot_property_graph
+
 """
     plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vector{UnitRange{Int64}}, save_path::String)
 

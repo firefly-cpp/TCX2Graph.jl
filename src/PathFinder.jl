@@ -1,3 +1,5 @@
+export find_path_between_segments
+
 """
     find_path_between_segments(
         start_segment::Dict{String, Any},

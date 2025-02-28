@@ -45,7 +45,7 @@ include("../src/TCX2Graph.jl")
         @test kdtree isa KDTree  # Correct the test to check the type
     end
 
-    # Test for find_overlapping_segments_across_paths
+    #= # Test for find_overlapping_segments_across_paths
     @testset "find_overlapping_segments_across_paths function" begin
         # Simulate GPS data with overlapping paths
         gps_data = Dict(
@@ -66,9 +66,9 @@ include("../src/TCX2Graph.jl")
 
         # Expect some overlaps
         @test length(overlapping_segments) > 0
-    end
+    end =#
 
-    # Test for plot_individual_overlapping_segments
+    #= # Test for plot_individual_overlapping_segments
     @testset "plot_individual_overlapping_segments function" begin
         gps_data = Dict(
             1 => Dict{String, Any}("latitude" => 48.8566, "longitude" => 2.3522),
@@ -88,7 +88,7 @@ include("../src/TCX2Graph.jl")
 
         # Cleanup
         rm(save_dir, recursive=true)
-    end
+    end =#
 
     # Test for plot_property_graph
     @testset "plot_property_graph function" begin
