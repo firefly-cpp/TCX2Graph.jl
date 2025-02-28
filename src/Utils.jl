@@ -208,12 +208,38 @@ function get_ref_ride_idx_by_filename(paths::Vector{UnitRange{Int64}},
     error("No ride with file name '$target_filename' found.")
 end
 
-# Convert a GPS dictionary to an SVector (longitude, latitude)
+"""
+    gps_to_point(gps::Dict{String, Any}) -> SVector{2, Float64}
+
+Converts a GPS dictionary to an `SVector` containing longitude and latitude.
+
+# Arguments
+- `gps::Dict{String, Any}`: The GPS data dictionary containing keys `"longitude"` and `"latitude"`.
+
+# Returns
+- `SVector{2, Float64}`: A static vector containing the longitude and latitude.
+
+# Details
+This function extracts the longitude and latitude from the provided GPS dictionary and returns them as an `SVector` for efficient numerical computations.
+"""
 function gps_to_point(gps::Dict{String,Any})
     return SVector(gps["longitude"], gps["latitude"])
 end
 
-# Build a KDTree from all GPS data (provided for completeness)
+"""
+    gps_to_point(gps::Dict{String, Any}) -> SVector{2, Float64}
+
+Converts a GPS dictionary to an `SVector` containing longitude and latitude.
+
+# Arguments
+- `gps::Dict{String, Any}`: The GPS data dictionary containing keys `"longitude"` and `"latitude"`.
+
+# Returns
+- `SVector{2, Float64}`: A static vector containing the longitude and latitude.
+
+# Details
+This function extracts the longitude and latitude from the provided GPS dictionary and returns them as an `SVector` for efficient numerical computations.
+"""
 function create_kdtree_index(all_gps_data::Dict{Int,Dict{String,Any}})
     points = [gps_to_point(gps) for gps in values(all_gps_data)]
     return KDTree(points)
@@ -261,7 +287,19 @@ function cumulative_distances(ref_indices::Vector{Int}, all_gps_data::Dict{Int,D
     return cum
 end
 
-# Simple location check (if needed)
+"""
+    is_same_location(gps1::Dict{String,Any}, gps2::Dict{String,Any}; tolerance=0.0015) -> Bool
+
+Checks if two GPS locations are the same within a specified tolerance.
+
+# Arguments
+- `gps1::Dict{String,Any}`: The first GPS location.
+- `gps2::Dict{String,Any}`: The second GPS location.
+- `tolerance=0.0015`: The tolerance for considering the locations as the same (default is 0.0015).
+
+# Returns
+- `Bool`: `true` if the locations are the same within the specified tolerance, `false` otherwise.
+"""
 function is_same_location(gps1::Dict{String,Any}, gps2::Dict{String,Any}; tolerance=0.0015)
     return norm(gps_to_point(gps1) - gps_to_point(gps2)) <= tolerance
 end
