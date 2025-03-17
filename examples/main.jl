@@ -30,7 +30,7 @@ function main()
     end
 
     # Create property graph
-    graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(tcx_files, false)
+    graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(missing, false)
 
     # Print all the paths_files
     for (path, file) in paths_files
@@ -38,7 +38,7 @@ function main()
     end
 
     # choose the ride by filename.
-    target_file = "activity_12381259800.tcx"
+    target_file = "1.tcx"
     ref_ride_idx = TCX2Graph.get_ref_ride_idx_by_filename(paths, paths_files, target_file)
     println("Using ride index $ref_ride_idx corresponding to file $target_file")
 
@@ -46,10 +46,10 @@ function main()
         gps_data,
         paths;
         ref_ride_idx = ref_ride_idx,
-        max_length_m = 3000.0,
+        max_length_m = 1000.0,
         tol_m = 50.0,
-        window_step = 1,
-        min_runs = 3,
+        window_step = 2,
+        min_runs = 10,
         prefilter_margin_m = 100.0,
         dedup_overlap_frac = 0.5
     )

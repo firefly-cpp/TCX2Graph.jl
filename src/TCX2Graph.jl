@@ -18,5 +18,6 @@ include("SegmentVisualizer.jl")
 include("SegmentAnalysis.jl")
 include("PathFinder.jl")
 include("SegmentRuns.jl")
+include("Neo4jUtils.jl")
 
 end

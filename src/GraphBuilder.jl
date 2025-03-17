@@ -27,23 +27,38 @@ consecutive GPS points within each TCX file. The function also returns a diction
 and a vector representing the vertex ranges for each path (i.e., each TCX file).
 
 """
-function create_property_graph(tcx_files::Vector{String}, add_features::Bool=false)
+function create_property_graph(tcx_files::Union{Vector{String}, Missing}, add_features::Bool=false)
     graph = SimpleGraph()
-    all_gps_data = Dict{Int, Dict{String, Any}}()  # Stores properties for each vertex
-    paths = Vector{UnitRange{Int64}}()  # Stores ranges of vertices for each TCX file
+    all_gps_data = Dict{Int, Dict{String, Any}}()
+    paths = Vector{UnitRange{Int64}}()
     paths_files = Dict{UnitRange{Int64}, String}()
 
-    for (index, tcx_file_path) in enumerate(tcx_files)
-        gps_points = read_tcx_gps_points(tcx_file_path, add_features)
-        # Skip file if it returned nothing (i.e., no valid GPS data)
+    use_neo4j = ismissing(tcx_files)
 
-        if isnothing(gps_points)
+    if use_neo4j
+        println("Fetching TCX filenames from Neo4j...")
+        tcx_files = fetch_tcx_filenames_from_neo4j()
+
+        if isempty(tcx_files)
+            error("No TCX data available in Neo4j.")
+        end
+    end
+
+    println("Processing $(length(tcx_files)) TCX files...")
+
+    for (index, tcx_file_path) in enumerate(tcx_files)
+        # Read GPS points from the correct data source
+        gps_points = use_neo4j ? fetch_gps_data_from_neo4j(tcx_file_path) :
+                                 read_tcx_gps_points(tcx_file_path, add_features)
+
+        if isnothing(gps_points) || isempty(gps_points)
             println("Skipping file: $tcx_file_path (No valid trackpoints).")
-            continue  # Move to the next file
+            continue
         end
 
         start_index = nv(graph) + 1
         add_vertices!(graph, length(gps_points))
+
         for i in 1:length(gps_points) - 1
             add_edge!(graph, start_index + i - 1, start_index + i)
         end
