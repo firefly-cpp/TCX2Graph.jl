@@ -1,6 +1,6 @@
 using HTTP, JSON3, Base64
 
-const NEO4J_URL = "http://localhost:7474/db/neo4j/tx/commit"
+const NEO4J_URL = "http://100.109.162.39:7474/db/neo4j/tx/commit"
 const HEADERS = [
     "Content-Type" => "application/json",
     "Authorization" => "Basic " * base64encode("neo4j:password")
