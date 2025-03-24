@@ -1,4 +1,13 @@
-using JSON, CSV, DataFrames, Statistics, StatsBase
+using JSON, CSV, DataFrames, Statistics, StatsBase, Dates
+
+function convert_time(s)
+    if s === nothing || ismissing(s) || s == "unknown"
+        return "unknown"
+    else
+        dt = DateTime(s, dateformat"yyyy-mm-ddTHH:MM:SS.s")
+        return Dates.value(dt - DateTime(1970,1,1)) / 1000.0
+    end
+end
 
 function something(x, default)
     if x === nothing || ismissing(x)
@@ -18,7 +27,7 @@ function json_to_dataframe(json_data)
                 "file_name"     => something(get(trackpoint, "file_name", missing), missing),
                 "path_index"    => path_index,
                 "run_start"     => run_start,
-                "time"          => something(get(trackpoint, "time", "unknown"), "unknown"),
+                "time"          => convert_time(get(trackpoint, "time", "unknown")),
                 "altitude"      => something(get(trackpoint, "altitude", missing), missing),
                 "distance"      => something(get(trackpoint, "distance", missing), missing),
                 "heart_rate"    => something(get(trackpoint, "heart_rate", missing), missing),
@@ -32,7 +41,7 @@ function json_to_dataframe(json_data)
                 "smoothness"    => something(get(trackpoint, "smoothness", "unknown"), "unknown"),
                 "width"         => something(get(trackpoint, "width", missing), missing),
                 "lit"           => something(get(trackpoint, "lit", "unknown"), "unknown"),
-                "incline"       => something(get(trackpoint, "incline", missing), missing),
+                "incline"       => something(get(trackpoint, "incline", "unknown"), "unknown"),
                 "barrier"       => something(get(trackpoint, "barrier", "unknown"), "unknown"),
                 "crossing"      => something(get(trackpoint, "crossing", "unknown"), "unknown"),
                 "landuse"       => something(get(trackpoint, "landuse", "unknown"), "unknown"),

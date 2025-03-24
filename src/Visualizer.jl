@@ -41,7 +41,7 @@ function plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vect
         path_index += 1
     end
 
-    display(p)
+    gui(p)
 end
 
 
