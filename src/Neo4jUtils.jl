@@ -1,37 +1,52 @@
 using HTTP, JSON3, Base64
 
-const NEO4J_URL = "http://100.109.162.39:7474/db/neo4j/tx/commit"
 const HEADERS = [
     "Content-Type" => "application/json",
     "Authorization" => "Basic " * base64encode("neo4j:password")
 ]
 
+function neo4j_url(port::Int)
+    return "http://100.109.162.39:$port/db/neo4j/tx/commit"
+end
+
+const FILE_PORT_MAP = Dict{String, Int}()
+
 function fetch_tcx_filenames_from_neo4j()
-    query = """
-    MATCH (t:Trackpoint)
-    RETURN DISTINCT t.tcx_file
-    """
+    all_filenames = Set{String}()
 
-    payload = JSON3.write(Dict("statements" => [Dict("statement" => query)]))
-    response = HTTP.post(NEO4J_URL, HEADERS, payload)
+    for port in 7471:7479
+        url = neo4j_url(port)
+        println("Checking Neo4j at $url")
 
-    # Parse response
-    parsed_response = JSON3.read(String(response.body))
+        try
+            query = """
+            MATCH (t:Trackpoint)
+            RETURN DISTINCT t.tcx_file
+            """
+            payload = JSON3.write(Dict("statements" => [Dict("statement" => query)]))
+            response = HTTP.post(url, HEADERS, payload)
+            parsed = JSON3.read(String(response.body))
 
-    # Debugging output
-    println("Neo4j Response: ", parsed_response)
+            records = parsed[:results][1][:data]
+            filenames = [record[:row][1] for record in records]
 
-    # Extract filenames safely
-    try
-        records = parsed_response[:results][1][:data]
-        filenames = [record[:row][1] for record in records]
-        return filenames
-    catch e
-        error("Error extracting filenames from Neo4j response: ", e)
+            for f in filenames
+                FILE_PORT_MAP[f] = port
+            end
+
+            union!(all_filenames, filenames)
+        catch e
+            @warn "Failed to query Neo4j at $url: $e"
+        end
     end
+
+    return collect(all_filenames)
 end
 
 function fetch_gps_data_from_neo4j(tcx_filename::String)::Vector{Dict{String, Any}}
+    port = get(FILE_PORT_MAP, tcx_filename, 7474)  # fallback if unknown
+    url = neo4j_url(port)
+
     query = """
     MATCH (t:Trackpoint {tcx_file: \$tcx_file})
     RETURN t.id, t.latitude, t.longitude, t.time, t.altitude, t.distance,
@@ -42,13 +57,11 @@ function fetch_gps_data_from_neo4j(tcx_filename::String)::Vector{Dict{String, An
     """
 
     payload = JSON3.write(Dict("statements" => [Dict("statement" => query, "parameters" => Dict("tcx_file" => tcx_filename))]))
-    response = HTTP.post(NEO4J_URL, HEADERS, payload)
+    response = HTTP.post(url, HEADERS, payload)
+    parsed = JSON3.read(String(response.body))
 
-    parsed_response = JSON3.read(String(response.body))
-
-    # Extract and format GPS points
     gps_points = []
-    for row in parsed_response["results"][1]["data"]
+    for row in parsed["results"][1]["data"]
         if length(row["row"]) > 0
             push!(gps_points, Dict(
                 "latitude" => row["row"][2],
@@ -75,7 +88,6 @@ function fetch_gps_data_from_neo4j(tcx_filename::String)::Vector{Dict{String, An
         end
     end
 
-    println("Fetched $(length(gps_points)) GPS points for file: $tcx_filename")
-
+    println("Fetched $(length(gps_points)) GPS points for file: $tcx_filename from port $port")
     return gps_points
 end

@@ -5,7 +5,7 @@ using JSON
 export read_tcx_gps_points, create_proper_polyline, query_overpass_polyline, assign_road_features!, find_closest_road_features
 
 # Set your Overpass endpoint to your local instance
-Overpass.set_endpoint("http://localhost:12345/api/")
+Overpass.set_endpoint("http://100.109.162.39:12345/api/")
 
 """
     read_tcx_gps_points(tcx_file_path::String, add_features::Bool) -> Vector{Dict{String, Any}}
