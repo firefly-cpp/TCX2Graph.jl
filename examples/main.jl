@@ -8,7 +8,6 @@ using CSV
 println("Number of threads: ", Threads.nthreads())
 
 function main()
-
 #=
     # Path to the folder containing the .tcx files
     tcx_folder_path = TCX2Graph.get_absolute_path("../example_data/files")
@@ -31,8 +30,9 @@ function main()
             error("File not found: $file")
         end
     end
-
+=#
     # Create property graph
+    # tcx_files or missing and true or false for osm
     graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(missing, false)
 
     # Print all the paths_files
@@ -41,10 +41,10 @@ function main()
     end
 
     # Plot property graph
-    # TCX2Graph.plot_property_graph(gps_data, paths)
+    TCX2Graph.plot_property_graph(gps_data, paths, "./example_data/all_plots/multi_tcx_graph_property.html")
 
     # choose the ride by filename.
-    target_file = "50.tcx"
+   #=  target_file = "50.tcx"
     ref_ride_idx = TCX2Graph.get_ref_ride_idx_by_filename(paths, paths_files, target_file)
     println("Using ride index $ref_ride_idx corresponding to file $target_file")
 
@@ -52,10 +52,10 @@ function main()
         gps_data,
         paths;
         ref_ride_idx = ref_ride_idx,
-        max_length_m = 1000.0,
-        tol_m = 100.0,
+        max_length_m = 600.0,
+        tol_m = 75.0,
         window_step = 1,
-        min_runs = 8,
+        min_runs = 52,
         prefilter_margin_m = 150.0,
         dedup_overlap_frac = 0.5
     )
@@ -66,12 +66,12 @@ function main()
     end
 
     # Plot individual overlapping segments
-    TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "/Volumes/Arion/feri/tcx2graph/svtemp/")
+    TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./example_data/seg_plots/") =#
 
     # Choose segment index for analysis
     # segment_idx = 1
     # total_distance, total_ascent, total_descent, total_vertical_meters, max_gradient, avg_gradient =
-    #    TCX2Graph.compute_segment_characteristics_basic(segment_idx, gps_data, overlapping_segments)
+    #     TCX2Graph.compute_segment_characteristics_basic(segment_idx, gps_data, overlapping_segments)
 
     # println("Segment $segment_idx Characteristics:")
     # println("Distance: $total_distance meters")
@@ -82,9 +82,9 @@ function main()
     # println("Average Gradient: $(avg_gradient * 100)%")
 
     # Final visualization of property graph
-    #TCX2Graph.plot_property_graph(gps_data, paths, save_path)
-    #println("Visualization saved to: ", save_path)
-
+    # TCX2Graph.plot_property_graph(gps_data, paths, save_path)
+    # println("Visualization saved to: ", save_path)
+#=
     # Example of selecting start and end segments (use actual indices or logic as needed)
     start_segment = overlapping_segments[7]  # Select your actual start segment
     end_segment = overlapping_segments[5]  # Select your actual end segment
@@ -110,18 +110,20 @@ function main()
     catch e
         println("Error finding path: ", e)
     end
-
+ 
     # Define problem dimensions and bounds based on feature count
     path_features = TCX2Graph.extract_segment_features(path_segments, gps_data)
     println("Extracting features for path segments...")
     filtered_features = TCX2Graph.filter_features(path_features)
     # println("Filtered features: ", filtered_features)
 
+
+
     runs = TCX2Graph.extract_single_segment_runs(overlapping_segments[1], gps_data)
     json_str = JSON.json(runs)
-    write("/Volumes/Arion/feri/tcx2graph/seg_json/segment_runs.json", json_str)
-    println("Segment runs JSON written to /Volumes/Arion/feri/tcx2graph/seg_json/segment_runs.json")
-=#
+    write("./example_data/seg_json/segment_runs.json", json_str)
+    println("Segment runs JSON written.")
+
     # Load JSON data
     json_path = "./example_data/seg_json/segment_runs.json"
     json_data = open(json_path, "r") do f
@@ -140,7 +142,7 @@ function main()
     CSV.write("./example_data/seg_json/segment_runs_cleaned.csv", cleaned_df)
 
     println("Cleaned dataset saved successfully!")
-
+=#
 end
 
 main()

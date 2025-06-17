@@ -14,7 +14,7 @@ Visualizes a property graph of multiple TCX paths and saves the plot as an SVG f
 # Details
 This function generates a plot of multiple TCX paths, assigning each path a different color for visual distinction. The paths are displayed on a plot with longitude as the x-axis and latitude as the y-axis. The resulting plot is saved as an SVG file at the specified location. The function uses a preset list of colors to differentiate paths, and the plot is configured for large-scale, high-resolution output.
 """
-function plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vector{UnitRange{Int64}})
+function plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vector{UnitRange{Int64}}, save_path::AbstractString)
     plotly()
     colors = [:red, :blue, :green, :orange, :purple, :cyan]
     p = plot(title="Multiple TCX Paths (Property Graph) - Advanced Interactive",
@@ -41,7 +41,7 @@ function plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vect
         path_index += 1
     end
 
-    gui(p)
-end
+    savefig(p, save_path)
+   end
 
 
