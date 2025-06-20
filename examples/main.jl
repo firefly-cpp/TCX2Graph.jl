@@ -8,9 +8,9 @@ using CSV
 println("Number of threads: ", Threads.nthreads())
 
 function main()
-#=
+
     # Path to the folder containing the .tcx files
-    tcx_folder_path = TCX2Graph.get_absolute_path("../example_data/files")
+    tcx_folder_path = TCX2Graph.get_absolute_path("../example_data/files_weather")
 
     # Get all .tcx files from the folder
     tcx_files = TCX2Graph.get_tcx_files_from_directory(tcx_folder_path)
@@ -30,10 +30,10 @@ function main()
             error("File not found: $file")
         end
     end
-=#
+
     # Create property graph
-    # tcx_files or missing and true or false for osm
-    graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(missing, false)
+    # tcx_files or missing and true or false for osm and weather
+    graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(tcx_files, true)
 
     # Print all the paths_files
     for (path, file) in paths_files

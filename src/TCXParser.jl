@@ -1,6 +1,7 @@
 using TCXReader
 using Overpass
 using JSON
+using Dates
 
 export read_tcx_gps_points, create_proper_polyline, query_overpass_polyline, assign_road_features!, find_closest_road_features
 
@@ -79,6 +80,7 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
 
     if add_features
         assign_road_features!(trackpoints, query_overpass_polyline(polyline))
+        enrich_with_weather!(trackpoints)
     else
         for tp in trackpoints
           tp["highway"] = missing
@@ -260,3 +262,79 @@ function find_closest_road_features(lat::Float64, lon::Float64, elements::Vector
     return closest_features
 end
 
+const weather_cache = Dict{Tuple{Float64, Float64, DateTime}, Dict{String, Any}}()
+
+function fetch_weather(lat::Float64, lon::Float64, dt::DateTime)
+    dt_hour = DateTime(year(dt), month(dt), day(dt), hour(dt))
+    cache_key = (lat, lon, dt_hour)
+    if haskey(weather_cache, cache_key)
+        return weather_cache[cache_key]
+    end
+    date_str = Dates.format(dt_hour, "yyyy-mm-dd")
+    url = "https://archive-api.open-meteo.com/v1/archive?" *
+        "latitude=$(lat)&longitude=$(lon)" *
+        "&start_date=$(date_str)&end_date=$(date_str)" *
+        "&hourly=temperature_2m,precipitation,windspeed_10m,winddirection_10m," *
+        "relative_humidity_2m,cloudcover,weathercode,pressure_msl,dewpoint_2m," *
+        "uv_index,uv_index_clear_sky,snowfall,snow_depth,shortwave_radiation," *
+        "direct_radiation,diffuse_radiation,evapotranspiration,et0_fao_evapotranspiration"
+    r = HTTP.get(url)
+    data = JSON.parse(String(r.body))
+    idx = findfirst(t -> t == string(dt_hour), data["hourly"]["time"])
+    keys = [
+        "temperature_2m", "precipitation", "windspeed_10m", "winddirection_10m",
+        "relative_humidity_2m", "cloudcover", "weathercode", "pressure_msl",
+        "dewpoint_2m", "uv_index", "uv_index_clear_sky", "snowfall", "snow_depth",
+        "shortwave_radiation", "direct_radiation", "diffuse_radiation",
+        "evapotranspiration", "et0_fao_evapotranspiration"
+    ]
+    weather = Dict{String, Any}()
+    if isnothing(idx)
+        for k in keys
+            weather[k] = missing
+        end
+    else
+        for k in keys
+            weather[k] = haskey(data["hourly"], k) ? data["hourly"][k][idx] : missing
+        end
+    end
+    weather_cache[cache_key] = weather
+    return weather
+end
+
+function enrich_with_weather!(trackpoints::Vector{Dict{String, Any}})
+    for tp in trackpoints
+        if ismissing(tp["latitude"]) || ismissing(tp["longitude"]) || ismissing(tp["time"])
+            for k in [
+                "temperature_2m", "precipitation", "windspeed_10m", "winddirection_10m",
+                "relative_humidity_2m", "cloudcover", "weathercode", "pressure_msl",
+                "dewpoint_2m", "uv_index", "uv_index_clear_sky", "snowfall", "snow_depth",
+                "shortwave_radiation", "direct_radiation", "diffuse_radiation",
+                "evapotranspiration", "et0_fao_evapotranspiration"
+            ]
+                tp[k] = missing
+            end
+            continue
+        end
+        lat = tp["latitude"]
+        lon = tp["longitude"]
+        # Parse time to DateTime
+        dt = tp["time"] isa DateTime ? tp["time"] : tryparse(DateTime, tp["time"])
+        if isnothing(dt)
+            for k in [
+                "temperature_2m", "precipitation", "windspeed_10m", "winddirection_10m",
+                "relative_humidity_2m", "cloudcover", "weathercode", "pressure_msl",
+                "dewpoint_2m", "uv_index", "uv_index_clear_sky", "snowfall", "snow_depth",
+                "shortwave_radiation", "direct_radiation", "diffuse_radiation",
+                "evapotranspiration", "et0_fao_evapotranspiration"
+            ]
+                tp[k] = missing
+            end
+            continue
+        end
+        weather = fetch_weather(lat, lon, dt)
+        for (k, v) in weather
+            tp[k] = v
+        end
+    end
+end
