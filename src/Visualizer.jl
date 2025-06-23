@@ -32,12 +32,15 @@ function plot_property_graph(gps_data::Dict{Int, Dict{String, Any}}, paths::Vect
         color = colors[(path_index - 1) % length(colors) + 1]
         longs = Float64[]
         lats = Float64[]
+        hovers = String[]
         for vertex in path
             coord = gps_data[vertex]
             push!(longs, coord["longitude"])
             push!(lats, coord["latitude"])
+            hover_info = join(["$k: $(coord[k])" for k in sort(collect(keys(coord)))], "<br>")
+            push!(hovers, hover_info)
         end
-        plot!(p, longs, lats, color=color, label="Path $path_index", lw=2)
+        plot!(p, longs, lats, color=color, label="Path $path_index", lw=2, hover=hovers)
         path_index += 1
     end
 
