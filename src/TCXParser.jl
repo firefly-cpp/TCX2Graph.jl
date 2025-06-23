@@ -2,11 +2,13 @@ using TCXReader
 using Overpass
 using JSON
 using Dates
+using HTTP
 
 export read_tcx_gps_points, create_proper_polyline, query_overpass_polyline, assign_road_features!, find_closest_road_features
 
 # Set your Overpass endpoint to your local instance
-Overpass.set_endpoint("http://100.109.162.39:12345/api/")
+# Overpass.set_endpoint("http://100.109.162.39:12345/api/")
+Overpass.set_endpoint("https://overpass-api.de/api/")
 
 """
     read_tcx_gps_points(tcx_file_path::String, add_features::Bool) -> Vector{Dict{String, Any}}
@@ -263,24 +265,37 @@ function find_closest_road_features(lat::Float64, lon::Float64, elements::Vector
 end
 
 const weather_cache = Dict{Tuple{Float64, Float64, DateTime}, Dict{String, Any}}()
+const WEATHER_GRID_RESOLUTION = 0.25
+
+round_coord(value::Float64, res::Float64=WEATHER_GRID_RESOLUTION) = round(value / res) * res
 
 function fetch_weather(lat::Float64, lon::Float64, dt::DateTime)
+    lat_r = round_coord(lat)
+    lon_r = round_coord(lon)
     dt_hour = DateTime(year(dt), month(dt), day(dt), hour(dt))
-    cache_key = (lat, lon, dt_hour)
+    cache_key = (lat_r, lon_r, dt_hour)
     if haskey(weather_cache, cache_key)
         return weather_cache[cache_key]
     end
     date_str = Dates.format(dt_hour, "yyyy-mm-dd")
     url = "https://archive-api.open-meteo.com/v1/archive?" *
-        "latitude=$(lat)&longitude=$(lon)" *
+        "latitude=$(lat_r)&longitude=$(lon_r)" *
         "&start_date=$(date_str)&end_date=$(date_str)" *
         "&hourly=temperature_2m,precipitation,windspeed_10m,winddirection_10m," *
         "relative_humidity_2m,cloudcover,weathercode,pressure_msl,dewpoint_2m," *
         "uv_index,uv_index_clear_sky,snowfall,snow_depth,shortwave_radiation," *
         "direct_radiation,diffuse_radiation,evapotranspiration,et0_fao_evapotranspiration"
-    r = HTTP.get(url)
-    data = JSON.parse(String(r.body))
-    idx = findfirst(t -> t == string(dt_hour), data["hourly"]["time"])
+    data = Dict{String,Any}()
+    try
+        r = HTTP.get(url)
+        data = JSON.parse(String(r.body))
+    catch e
+        println("Weather request failed: $e")
+        data["hourly"] = Dict{String,Any}("time" => String[])
+    end
+    times = haskey(data, "hourly") && haskey(data["hourly"], "time") ?
+                DateTime.(data["hourly"]["time"]) : DateTime[]
+    idx = findfirst(==(dt_hour), times)
     keys = [
         "temperature_2m", "precipitation", "windspeed_10m", "winddirection_10m",
         "relative_humidity_2m", "cloudcover", "weathercode", "pressure_msl",
