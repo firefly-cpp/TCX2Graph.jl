@@ -31,8 +31,9 @@ for the entire segment.
 """
 function compute_segment_characteristics_basic(segment_idx, gps_data, overlapping_segments)
     segment = overlapping_segments[segment_idx]
-    start_idx = segment["start_idx"]
-    end_idx = segment["end_idx"]
+    ref_range = segment["ref_range"]
+    start_idx = first(ref_range)
+    end_idx = last(ref_range)
 
     total_distance = 0.0
     total_ascent = 0.0
@@ -96,8 +97,9 @@ function extract_segment_features(overlapping_segments::Vector{Dict{String, Any}
     all_features = Vector{Dict{String, Any}}()
 
     for segment in overlapping_segments
-        start_idx = segment["start_idx"]
-        end_idx = segment["end_idx"]
+        ref_range = segment["ref_range"]
+        start_idx = first(ref_range)
+        end_idx = last(ref_range)
 
         trackpoints = [gps_data[idx] for idx in start_idx:end_idx]
 
@@ -163,6 +165,8 @@ function filter_features(features::Vector{Dict{String, Any}})
         for feature in features
     ]
 end
+
+
 
 
 

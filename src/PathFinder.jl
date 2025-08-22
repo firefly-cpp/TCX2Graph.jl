@@ -10,7 +10,7 @@ segment_end(seg) = last(seg["ref_range"])
         overlap_segments::Vector{Dict{String, Any}},
         all_gps_data::Dict{Int, Dict{String, Any}};
         min_length::Int=3,
-        min_runs::Int=2,
+        path_min_runs::Int=2,
         tolerance_m::Float64=50.0
     ) -> Vector{Dict{String, Any}}
 
@@ -23,7 +23,7 @@ meaning it considers that segments can be traversed in a forward or reversed ori
 - `overlap_segments::Vector{Dict{String, Any}}`: A list of all detected overlapping segments to search through.
 - `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary of all GPS data points.
 - `min_length::Int`: The minimum number of segments required in the resulting path.
-- `min_runs::Int`: The minimum number of paths in which each segment must appear to be considered.
+- `path_min_runs::Int`: The minimum number of paths in which each segment must appear to be considered for the path.
 - `tolerance_m::Float64`: The maximum distance in **meters** allowed between segment endpoints for them to be considered connected.
 
 # Returns
@@ -39,7 +39,7 @@ function find_path_between_segments(
     overlap_segments::Vector{Dict{String, Any}},
     all_gps_data::Dict{Int, Dict{String, Any}};
     min_length::Int=3,
-    min_runs::Int=2,
+    path_min_runs::Int=2,
     tolerance_m::Float64=50.0
 ) :: Vector{Dict{String, Any}}
 
@@ -64,11 +64,11 @@ function find_path_between_segments(
     adj = [Int[] for _ in 1:(2*num_segments)]
 
     for i in 1:num_segments
-        if length(overlap_segments[i]["run_ranges"]) < min_runs continue end
+        if length(overlap_segments[i]["run_ranges"]) < path_min_runs continue end
 
         for j in 1:num_segments
             if i == j continue end
-            if length(overlap_segments[j]["run_ranges"]) < min_runs continue end
+            if length(overlap_segments[j]["run_ranges"]) < path_min_runs continue end
 
             start_i_coords, end_i_coords = endpoints[i]
             start_j_coords, end_j_coords = endpoints[j]

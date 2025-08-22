@@ -108,8 +108,8 @@ function read_tcx_gps_points(tcx_file_path::String, add_features::Bool)
     end =#
 
     # Print just first 1 trackpoint
-    println("First trackpoint:")
-    println(trackpoints[1])
+    # println("First trackpoint:")
+    # println(trackpoints[1])
 
     return trackpoints
 end

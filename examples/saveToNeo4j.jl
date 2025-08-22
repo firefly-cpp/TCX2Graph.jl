@@ -101,7 +101,7 @@ function main()
         batch_files = tcx_files[i:min(i+batch_size-1, length(tcx_files))]
         println("Thread $(Threads.threadid()): Processing batch $(i) - $(i + batch_size - 1)")
 
-        graph, gps_data, paths = TCX2Graph.create_property_graph(batch_files, true)
+        graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(batch_files, true)
 
         store_to_neo4j_http(graph, gps_data, paths, batch_files)
 
