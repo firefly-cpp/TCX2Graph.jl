@@ -1,5 +1,8 @@
 export find_path_between_segments
 
+segment_start(seg) = first(seg["ref_range"])
+segment_end(seg) = last(seg["ref_range"])
+
 """
     find_path_between_segments(
         start_segment::Dict{String, Any},
@@ -7,35 +10,28 @@ export find_path_between_segments
         overlap_segments::Vector{Dict{String, Any}},
         all_gps_data::Dict{Int, Dict{String, Any}};
         min_length::Int=3,
-        min_paths::Int=2,
-        tolerance::Float64=0.001
+        min_runs::Int=2,
+        tolerance_m::Float64=50.0
     ) -> Vector{Dict{String, Any}}
 
-Finds a path between two segments by concatenating overlapping segments that meet specified criteria, such as a minimum path length
-and the minimum number of paths each segment must appear in. Each segment in the resulting path includes an added `"segment_index"`
-field to indicate its index position within `overlap_segments`.
+Finds a directed path between two segments by connecting them head-to-tail. This version is direction-aware,
+meaning it considers that segments can be traversed in a forward or reversed orientation to form a continuous path.
 
 # Arguments
-- `start_segment::Dict{String, Any}`: The starting segment dictionary, containing `start_idx`, `end_idx`, and `paths` fields.
-- `end_segment::Dict{String, Any}`: The ending segment dictionary, containing `start_idx`, `end_idx`, and `paths` fields.
-- `overlap_segments::Vector{Dict{String, Any}}`: A list of overlapping segments to search through.
-- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary of GPS data, indexed by start and end points (`start_idx` and `end_idx`), each entry holding GPS attributes like longitude and latitude.
-- `min_length::Int`: The minimum number of segments (including start and end) required in the resulting path.
-- `min_paths::Int`: The minimum number of paths in which each segment must appear to be considered.
-- `tolerance::Float64`: The maximum Euclidean distance allowed between segments for them to be considered connected.
+- `start_segment::Dict{String, Any}`: The starting segment dictionary.
+- `end_segment::Dict{String, Any}`: The ending segment dictionary.
+- `overlap_segments::Vector{Dict{String, Any}}`: A list of all detected overlapping segments to search through.
+- `all_gps_data::Dict{Int, Dict{String, Any}}`: A dictionary of all GPS data points.
+- `min_length::Int`: The minimum number of segments required in the resulting path.
+- `min_runs::Int`: The minimum number of paths in which each segment must appear to be considered.
+- `tolerance_m::Float64`: The maximum distance in **meters** allowed between segment endpoints for them to be considered connected.
 
 # Returns
 - `Vector{Dict{String, Any}}`: A vector of dictionaries, each representing a segment in the path. Each segment includes an added
-  `"segment_index"` field showing its index within `overlap_segments`.
+  `"segment_index"` field and a `"orientation"` field (`:forward` or `:reversed`).
 
 # Throws
-- `ErrorException`: If no valid path is found between the provided `start_segment` and `end_segment`, or if the final path
-  does not meet `min_length`.
-
-# Details
-The function begins at `start_segment` and attempts to find successive segments within `overlap_segments` that satisfy both the
-distance `tolerance` and `min_paths` requirements. The search continues until the path can connect to `end_segment`. If a valid
-path is found, the segments in the path will each include `"segment_index"` fields corresponding to their indices in `overlap_segments`.
+- `ErrorException`: If no valid path is found or if the path does not meet `min_length`.
 """
 function find_path_between_segments(
     start_segment::Dict{String, Any},
@@ -43,66 +39,110 @@ function find_path_between_segments(
     overlap_segments::Vector{Dict{String, Any}},
     all_gps_data::Dict{Int, Dict{String, Any}};
     min_length::Int=3,
-    min_paths::Int=2,
-    tolerance::Float64=0.001
+    min_runs::Int=2,
+    tolerance_m::Float64=50.0
 ) :: Vector{Dict{String, Any}}
-    # Find the index of the start and end segments in the overlap_segments
+
     start_segment_index = findfirst(s -> s == start_segment, overlap_segments)
     end_segment_index = findfirst(s -> s == end_segment, overlap_segments)
 
-    # Initialize the path with the start segment and set its index
-    path_segments = [merge(start_segment, Dict("segment_index" => start_segment_index))]
-    current_segment = start_segment
+    if isnothing(start_segment_index) throw(ErrorException("Start segment not found in overlap_segments")) end
+    if isnothing(end_segment_index) throw(ErrorException("End segment not found in overlap_segments")) end
 
-    # Define the set of visited segments to avoid cycles
-    visited_segments = Set{Int}()
-    push!(visited_segments, start_segment["start_idx"])
+    num_segments = length(overlap_segments)
 
-    # Start the length count at 1 (already includes start_segment)
-    total_length = 1
+    endpoints = [
+        (
+            (all_gps_data[segment_start(s)]["latitude"], all_gps_data[segment_start(s)]["longitude"]),
+            (all_gps_data[segment_end(s)]["latitude"], all_gps_data[segment_end(s)]["longitude"])
+        ) for s in overlap_segments
+    ]
 
-    while true
-        # Find possible next segments within tolerance and meeting min_paths requirement
-        next_segments = filter(s ->
-            !(s["start_idx"] in visited_segments) &&
-            length(s["paths"]) >= min_paths &&
-            euclidean_distance(
-                (all_gps_data[current_segment["end_idx"]]["longitude"], all_gps_data[current_segment["end_idx"]]["latitude"]),
-                (all_gps_data[s["start_idx"]]["longitude"], all_gps_data[s["start_idx"]]["latitude"])
-            ) <= tolerance,
-            overlap_segments)
+    node_to_seg_ori(n) = n > num_segments ? (n - num_segments, :reversed) : (n, :forward)
+    seg_ori_to_node(s, o) = o == :forward ? s : s + num_segments
 
-        if isempty(next_segments)
-            # If no further segments can be found, throw an exception
-            throw(ErrorException("No valid path found between the two segments"))
-        end
+    adj = [Int[] for _ in 1:(2*num_segments)]
 
-        # Pick the next segment and find its index in overlap_segments
-        current_segment = next_segments[1]
-        current_segment_index = findfirst(s -> s == current_segment, overlap_segments)
+    for i in 1:num_segments
+        if length(overlap_segments[i]["run_ranges"]) < min_runs continue end
 
-        # Add the current segment to path_segments with its index
-        push!(path_segments, merge(current_segment, Dict("segment_index" => current_segment_index)))
+        for j in 1:num_segments
+            if i == j continue end
+            if length(overlap_segments[j]["run_ranges"]) < min_runs continue end
 
-        push!(visited_segments, current_segment["start_idx"])
+            start_i_coords, end_i_coords = endpoints[i]
+            start_j_coords, end_j_coords = endpoints[j]
 
-        total_length += 1
+            if haversine_distance(end_i_coords..., start_j_coords...) <= tolerance_m
+                push!(adj[seg_ori_to_node(i, :forward)], seg_ori_to_node(j, :forward))
+            end
+            if haversine_distance(end_i_coords..., end_j_coords...) <= tolerance_m
+                push!(adj[seg_ori_to_node(i, :forward)], seg_ori_to_node(j, :reversed))
+            end
 
-        # Check if the current segment can connect directly to the end segment
-        if euclidean_distance(
-                (all_gps_data[current_segment["end_idx"]]["longitude"], all_gps_data[current_segment["end_idx"]]["latitude"]),
-                (all_gps_data[end_segment["start_idx"]]["longitude"], all_gps_data[end_segment["start_idx"]]["latitude"])
-            ) <= tolerance
-            # Add the end segment to the path with its index
-            push!(path_segments, merge(end_segment, Dict("segment_index" => end_segment_index)))
-            total_length += 1
-            break
+            if haversine_distance(start_i_coords..., start_j_coords...) <= tolerance_m
+                push!(adj[seg_ori_to_node(i, :reversed)], seg_ori_to_node(j, :forward))
+            end
+            if haversine_distance(start_i_coords..., end_j_coords...) <= tolerance_m
+                push!(adj[seg_ori_to_node(i, :reversed)], seg_ori_to_node(j, :reversed))
+            end
         end
     end
 
-    # Final check to ensure we have met the minimum path length constraint
-    if total_length < min_length
-        throw(ErrorException("Path does not meet the minimum required length"))
+    q = [seg_ori_to_node(start_segment_index, :forward)]
+    visited = falses(2 * num_segments)
+    visited[q[1]] = true
+    parent = zeros(Int, 2 * num_segments)
+
+    path_found = false
+    end_node = -1
+
+    while !isempty(q)
+        u_node = popfirst!(q)
+        u_seg_idx, u_orientation = node_to_seg_ori(u_node)
+
+        if u_seg_idx == end_segment_index
+            path_found = true
+            end_node = u_node
+            break
+        end
+
+        for v_node in adj[u_node]
+            if !visited[v_node]
+                visited[v_node] = true
+                parent[v_node] = u_node
+                push!(q, v_node)
+            end
+        end
+    end
+
+    if !path_found
+        throw(ErrorException("No valid directed path found between the two segments with tolerance $(tolerance_m)m"))
+    end
+
+    path_nodes = []
+    curr = end_node
+    while curr != 0
+        pushfirst!(path_nodes, curr)
+        curr = parent[curr]
+    end
+
+    if isempty(path_nodes) || node_to_seg_ori(path_nodes[1])[1] != start_segment_index
+        throw(ErrorException("Path reconstruction failed"))
+    end
+
+    if length(path_nodes) < min_length
+        throw(ErrorException("Path does not meet the minimum required length of $min_length segments (found $(length(path_nodes)))"))
+    end
+
+    path_segments = []
+    for node in path_nodes
+        seg_idx, orientation = node_to_seg_ori(node)
+        segment_data = merge(
+            overlap_segments[seg_idx],
+            Dict("segment_index" => seg_idx, "orientation" => orientation)
+        )
+        push!(path_segments, segment_data)
     end
 
     return path_segments

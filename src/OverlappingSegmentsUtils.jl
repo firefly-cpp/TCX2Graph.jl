@@ -4,6 +4,17 @@ using StaticArrays
 export find_overlapping_segments
 
 """
+	get_ride_bounding_box(ride_indices::AbstractVector{Int}, all_gps_data::Dict{Int, Dict{String, Any}})
+
+Computes the geographic bounding box for a given ride.
+"""
+function get_ride_bounding_box(ride_indices::AbstractVector{Int}, all_gps_data::Dict{Int, Dict{String, Any}})
+    lats = [all_gps_data[i]["latitude"] for i in ride_indices]
+    lons = [all_gps_data[i]["longitude"] for i in ride_indices]
+    return (min_lon=minimum(lons), min_lat=minimum(lats), max_lon=maximum(lons), max_lat=maximum(lats))
+end
+
+"""
 	find_best_window_in_ride(ride_global, candidate_polyline, window_size, tol_m, all_gps_data)
 
 Given a sorted array of global indices from a ride (found by a KD–tree pre–filter),
@@ -14,10 +25,13 @@ and its Fréchet distance.
 function find_best_window_in_ride(ride_global::Vector{Int}, candidate_polyline::Vector{SVector{2, Float64}}, window_size::Int, tol_m::Float64, all_gps_data::Dict{Int, Dict{String, Any}})
 	best_window = nothing
 	best_df = Inf
+	if isempty(ride_global) || length(ride_global) < window_size
+		return best_window, best_df
+	end
 	sorted_indices = sort(ride_global)
 	for i in 1:(length(sorted_indices)-window_size+1)
 		block = sorted_indices[i:(i+window_size-1)]
-		if maximum(diff(block)) > 1
+		if (block[end] - block[1]) > (window_size + 5)
 			continue
 		end
 		window_polyline = [gps_to_point(all_gps_data[j]) for j in block]
@@ -60,21 +74,50 @@ function find_overlapping_segments(
 	min_runs::Int = 2,
 	prefilter_margin_m::Float64 = 5.0,
 	dedup_overlap_frac::Float64 = 0.8,   # if 80% or more of indices overlap, consider duplicate
-)::Vector{Dict{String, Any}}
+)::Tuple{Vector{Dict{String, Any}}, Vector{Int}}
 	results = Vector{Dict{String, Any}}()
 	ref_indices = collect(paths[ref_ride_idx])
 	cum = cumulative_distances(ref_indices, all_gps_data)
 	result_lock = ReentrantLock()
 
-	# Prebuild KD–trees for each ride
-	ride_kdtrees = [create_ride_kdtree(paths[p], all_gps_data) for p in 1:length(paths)]
-	# Conversion factor from meters to degrees (approximate for small distances)
 	m_to_deg = 1.0 / 111000.0
 	tol_deg = tol_m * m_to_deg
 	prefilter_margin_deg = prefilter_margin_m * m_to_deg
 
-	@threads for s in 1:length(ref_indices)
-		# Extend candidate until candidate segment length is at least max_length_m
+	ref_bbox = get_ride_bounding_box(ref_indices, all_gps_data)
+
+	avg_lat_rad = deg2rad((ref_bbox.min_lat + ref_bbox.max_lat) / 2.0)
+	lon_margin_deg = prefilter_margin_deg / cos(avg_lat_rad)
+	lat_margin_deg = prefilter_margin_deg
+
+	expanded_ref_bbox = (
+		min_lon=ref_bbox.min_lon - lon_margin_deg,
+		min_lat=ref_bbox.min_lat - lat_margin_deg,
+		max_lon=ref_bbox.max_lon + lon_margin_deg,
+		max_lat=ref_bbox.max_lat + lat_margin_deg
+	)
+
+	close_ride_indices = Int[]
+	for p_idx in 1:length(paths)
+		ride_bbox = get_ride_bounding_box(collect(paths[p_idx]), all_gps_data)
+		# Check for intersection between expanded ref_bbox and ride_bbox
+		if !(expanded_ref_bbox.max_lon < ride_bbox.min_lon ||
+			 expanded_ref_bbox.min_lon > ride_bbox.max_lon ||
+			 expanded_ref_bbox.max_lat < ride_bbox.min_lat ||
+			 expanded_ref_bbox.min_lat > ride_bbox.max_lat)
+			push!(close_ride_indices, p_idx)
+		end
+	end
+	println("Found $(length(close_ride_indices)) rides close to the reference ride (including reference).")
+
+	if isempty(close_ride_indices)
+		println("Warning: No close rides found after pre-filtering. No overlapping segments will be found.")
+		return results, close_ride_indices
+	end
+	ride_kdtrees = [create_ride_kdtree(paths[p], all_gps_data) for p in close_ride_indices]
+	ride_idx_map = Dict(p_idx => i for (i, p_idx) in enumerate(close_ride_indices))
+
+	@threads for s in 1:window_step:length(ref_indices)
 		e = s
 		while e <= length(ref_indices) && (cum[e] - cum[s]) < max_length_m
 			e += 1
@@ -87,7 +130,6 @@ function find_overlapping_segments(
 		candidate_polyline = [gps_to_point(all_gps_data[i]) for i in candidate_range]
 		candidate_length = cum[e] - cum[s]
 
-		# Compute candidate bounding box (in degrees)
 		lats = [pt[2] for pt in candidate_polyline]
 		lons = [pt[1] for pt in candidate_polyline]
 		lat_min, lat_max = minimum(lats), maximum(lats)
@@ -96,27 +138,27 @@ function find_overlapping_segments(
 		half_diag = sqrt(((lon_max - lon_min) / 2)^2 + ((lat_max - lat_min) / 2)^2)
 		radius = half_diag + tol_deg + prefilter_margin_deg
 
-		# For each ride, use its KD–tree to get candidate points
 		run_ranges = Dict{Int, UnitRange{Int64}}()
 		count_found = 0
-		for p in 1:length(paths)
-			(kd, ride_global) = ride_kdtrees[p]
+		for p_idx in close_ride_indices
+			kdtree_local_idx = ride_idx_map[p_idx]
+			(kd, ride_global) = ride_kdtrees[kdtree_local_idx]
 			candidate_pts_idx = inrange(kd, center, radius)
 			candidate_global = ride_global[candidate_pts_idx]
 			window_size = length(candidate_range)
 			best_window, best_df = find_best_window_in_ride(candidate_global, candidate_polyline, window_size, tol_m, all_gps_data)
 			if best_window !== nothing && best_df <= tol_m
-				run_ranges[p] = best_window[1]:best_window[end]
+				run_ranges[p_idx] = best_window[1]:best_window[end]
 				count_found += 1
 			end
 		end
 
 		if count_found >= min_runs
-			# Deduplication: check if candidate_range significantly overlaps a previously accepted candidate.
+
 			duplicate = false
 			lock(result_lock) do
 				for cand in results
-					# Calculate the fraction of overlap between the candidate's ref_range and cand["ref_range"]
+
 					common = length(intersect(candidate_range, cand["ref_range"]))
 					frac = common / min(length(candidate_range), length(cand["ref_range"]))
 					if frac >= dedup_overlap_frac
@@ -141,7 +183,5 @@ function find_overlapping_segments(
 		end
 	end
 
-	return results
+	return results, close_ride_indices
 end
-
-

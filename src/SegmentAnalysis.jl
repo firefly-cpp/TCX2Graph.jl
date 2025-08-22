@@ -111,7 +111,6 @@ function extract_segment_features(overlapping_segments::Vector{Dict{String, Any}
 
         )
 
-        # Combine features with segment info
         push!(all_features, merge(Dict("start_idx" => start_idx, "end_idx" => end_idx), features))
     end
 

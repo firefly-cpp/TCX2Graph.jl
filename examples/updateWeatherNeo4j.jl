@@ -1,6 +1,5 @@
 using HTTP, JSON3, Dates, Base64
 
-# ==== CONFIGURATION ====
 const HEADERS = [
     "Content-Type" => "application/json",
     "Authorization" => "Basic " * base64encode("neo4j:password")
@@ -21,7 +20,6 @@ const WEATHER_KEYS = [
 ]
 const WEATHER_GRID_RESOLUTION = 0.5 # 0.5 degree grid for fewer API calls
 
-# ==== UTILS ====
 function round_coord(x::Float64, res::Float64=WEATHER_GRID_RESOLUTION)
     round(x / res) * res
 end
@@ -44,7 +42,6 @@ function extract_number(filename::AbstractString)
     isnothing(m) ? typemax(Int) : parse(Int, m.captures[1])
 end
 
-# ==== NEO4J ACCESS ====
 function fetch_tcx_filenames_from_neo4j()
     all_filenames = Set{String}()
     for port in 7471:7479
@@ -68,7 +65,6 @@ function fetch_tcx_filenames_from_neo4j()
             @warn "Failed to query Neo4j at $url: $e"
         end
     end
-    # Natural sort (e.g., 1.tcx, 2.tcx, ..., 10.tcx, etc.)
     return sort(collect(all_filenames), by=extract_number)
 end
 
@@ -141,7 +137,6 @@ function update_weather_bulk(trackpoints::Vector{Dict{String, Any}}, port::Int)
     println("Response: ", String(response.body))
 end
 
-# ==== WEATHER QUERY LOGIC ====
 function unique_weather_queries(trackpoints)
     queries = Set{Tuple{Float64, Float64, DateTime}}()
     for tp in trackpoints
@@ -161,7 +156,6 @@ function unique_weather_queries(trackpoints)
 end
 
 function match_api_time(api_times::Vector{String}, dt_hour::DateTime)
-    # Returns the matching index or nothing
     for (i, t) in enumerate(api_times)
         try
             t_parsed = DateTime(t, dateformat"yyyy-mm-ddTHH:MM")
@@ -169,7 +163,6 @@ function match_api_time(api_times::Vector{String}, dt_hour::DateTime)
                 return i
             end
         catch
-            # ignore
         end
     end
     return nothing
@@ -191,7 +184,7 @@ function fetch_weather_safe(lat::Float64, lon::Float64, dt::DateTime)
             r = HTTP.get(url)
             data = JSON3.read(String(r.body))
             api_times = haskey(data, "hourly") && haskey(data["hourly"], "time") ? data["hourly"]["time"] : String[]
-            idx = match_api_time(collect(api_times), dt_hour)  # <-- FIXED HERE
+            idx = match_api_time(collect(api_times), dt_hour)  
             weather = Dict{String, Any}()
             if isnothing(idx)
                 for k in WEATHER_KEYS
@@ -244,7 +237,6 @@ function enrich_file_weather!(trackpoints)
             end
         end
     end
-    # Debug print
     println("Sample enriched trackpoint: ", trackpoints[1])
     return true, nothing
 end
@@ -255,11 +247,10 @@ function append_to_processed_file(filename::String, processed_path="processed_fi
     end
 end
 
-# ==== MAIN ====
 function main()
     tcx_files = fetch_tcx_filenames_from_neo4j()
     processed_path = "processed_files.txt"
-    start_from = "" # set to file to resume, or "" to start from beginning
+    start_from = "240.tcx" # set to file to resume, or "" to start from beginning
     found = (start_from == "") ? true : false
     already = Set{String}()
     if isfile(processed_path)

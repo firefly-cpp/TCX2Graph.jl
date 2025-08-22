@@ -10,7 +10,7 @@ println("Number of threads: ", Threads.nthreads())
 function main()
 
     # Path to the folder containing the .tcx files
-    tcx_folder_path = TCX2Graph.get_absolute_path("../example_data/files_weather")
+    tcx_folder_path = TCX2Graph.get_absolute_path("../example_data/files")
 
     # Get all .tcx files from the folder
     tcx_files = TCX2Graph.get_tcx_files_from_directory(tcx_folder_path)
@@ -21,7 +21,7 @@ function main()
 
     println("Found $(length(tcx_files)) TCX files.")
 
-    save_path = TCX2Graph.get_absolute_path("multi_tcx_graph_property.svg")
+    # save_path = TCX2Graph.get_absolute_path("multi_tcx_graph_property.svg")
 
     # Check for file existence
     for file in tcx_files
@@ -33,40 +33,52 @@ function main()
 
     # Create property graph
     # tcx_files or missing and true or false for osm and weather
-    graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(tcx_files, true)
-
+    graph, gps_data, paths, paths_files = TCX2Graph.create_property_graph(tcx_files, false)
+#=
     # Print all the paths_files
     for (path, file) in paths_files
         println("Path: $path, File: $file")
     end
-
+=#
     # Plot property graph
-    TCX2Graph.plot_property_graph(gps_data, paths, "./example_data/all_plots/multi_tcx_graph_property.html")
+    # TCX2Graph.plot_property_graph(gps_data, paths, "./example_data/all_plots/multi_tcx_graph_property.html")
 
     # choose the ride by filename.
-   #=  target_file = "50.tcx"
+    target_file = "activity_12171312300.tcx"
     ref_ride_idx = TCX2Graph.get_ref_ride_idx_by_filename(paths, paths_files, target_file)
     println("Using ride index $ref_ride_idx corresponding to file $target_file")
 
-    @time overlapping_segments = TCX2Graph.find_overlapping_segments(
+    @time overlapping_segments, close_ride_indices = TCX2Graph.find_overlapping_segments(
         gps_data,
         paths;
         ref_ride_idx = ref_ride_idx,
-        max_length_m = 600.0,
-        tol_m = 75.0,
+        max_length_m = 1000.0,
+        tol_m = 200.0,
         window_step = 1,
-        min_runs = 52,
-        prefilter_margin_m = 150.0,
-        dedup_overlap_frac = 0.5
+        min_runs = 3,
+        prefilter_margin_m = 100.0,
+        dedup_overlap_frac = 0.1
     )
 
     println("Found $(length(overlapping_segments)) overlapping segments.")
-    for seg in overlapping_segments
-        println(seg)
-    end
+    # for seg in overlapping_segments
+    #     println(seg)
+    # end
 
+    # Plot all segments on one map
+    #=
+    if !isempty(overlapping_segments)
+        TCX2Graph.plot_all_segments_on_map(
+            gps_data,
+            paths,
+            overlapping_segments,
+            close_ride_indices,
+            "./example_data/all_plots/all_segments_map.html"
+        )
+    end
+    =#
     # Plot individual overlapping segments
-    TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./example_data/seg_plots/") =#
+    # TCX2Graph.plot_individual_overlapping_segments(gps_data, paths, overlapping_segments, "./example_data/seg_plots/")
 
     # Choose segment index for analysis
     # segment_idx = 1
@@ -84,10 +96,10 @@ function main()
     # Final visualization of property graph
     # TCX2Graph.plot_property_graph(gps_data, paths, save_path)
     # println("Visualization saved to: ", save_path)
-#=
+
     # Example of selecting start and end segments (use actual indices or logic as needed)
     start_segment = overlapping_segments[7]  # Select your actual start segment
-    end_segment = overlapping_segments[5]  # Select your actual end segment
+    end_segment = overlapping_segments[19]  # Select your actual end segment
 
     path_segments = []
 
@@ -98,19 +110,24 @@ function main()
                 end_segment,
                 overlapping_segments,
                 gps_data;
-                min_length=3,       # Adjust this as needed
-                min_paths=2,        # Adjust this as needed
-                tolerance=0.07     # Adjust this as needed
+                min_length=5,       # Adjust this as needed
+                min_runs=3,         # Use same min_runs as segment detection
+                tolerance_m=347.1    # Max distance between segments in meters
             )
 
-        println("Path found with segments:")
-        for segment in path_segments
-          println(segment)
-        end
+        println("Path found with segments: $(length(path_segments))")
+        # Print the segments in the path
+        # println("Path segments:")
+        # for segment in path_segments
+        #   println(segment)
+        # end
+        # Plot the path with segments
+        TCX2Graph.plot_path_with_segments(gps_data, paths, path_segments, "./example_data/path_plots/path_segments.html")
+        println("Path segments plotted successfully.")
     catch e
         println("Error finding path: ", e)
     end
- 
+#=
     # Define problem dimensions and bounds based on feature count
     path_features = TCX2Graph.extract_segment_features(path_segments, gps_data)
     println("Extracting features for path segments...")

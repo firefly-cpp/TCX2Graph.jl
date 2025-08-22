@@ -45,7 +45,25 @@ function json_to_dataframe(json_data)
                 "barrier"       => something(get(trackpoint, "barrier", "unknown"), "unknown"),
                 "crossing"      => something(get(trackpoint, "crossing", "unknown"), "unknown"),
                 "landuse"       => something(get(trackpoint, "landuse", "unknown"), "unknown"),
-                "lane_markings" => something(get(trackpoint, "lane_markings", "unknown"), "unknown")
+                "lane_markings" => something(get(trackpoint, "lane_markings", "unknown"), "unknown"),
+                "temperature_2m" => something(get(trackpoint, "temperature_2m", missing), missing), 
+                "precipitation" => something(get(trackpoint, "precipitation", missing), missing), 
+                "windspeed_10m" => something(get(trackpoint, "windspeed_10m", missing), missing), 
+                "winddirection_10m" => something(get(trackpoint, "winddirection_10m", missing), missing),
+                "relative_humidity_2m" => something(get(trackpoint, "relative_humidity_2m", missing), missing), 
+                "cloudcover" => something(get(trackpoint, "cloudcover", missing), missing), 
+                "weathercode" => something(get(trackpoint, "weathercode", missing), missing), 
+                "pressure_msl" => something(get(trackpoint, "pressure_msl", missing), missing),
+                "dewpoint_2m" => something(get(trackpoint, "dewpoint_2m", missing), missing), 
+                "uv_index" => something(get(trackpoint, "uv_index", missing), missing), 
+                "uv_index_clear_sky" => something(get(trackpoint, "uv_index_clear_sky", missing), missing), 
+                "snowfall" => something(get(trackpoint, "snowfall", missing), missing), 
+                "snow_depth" => something(get(trackpoint, "snow_depth", missing), missing),
+                "shortwave_radiation" => something(get(trackpoint, "shortwave_radiation", missing), missing), 
+                "direct_radiation" => something(get(trackpoint, "direct_radiation", missing), missing), 
+                "diffuse_radiation" => something(get(trackpoint, "diffuse_radiation", missing), missing),
+                "evapotranspiration" => something(get(trackpoint, "evapotranspiration", missing), missing), 
+                "et0_fao_evapotranspiration" => something(get(trackpoint, "et0_fao_evapotranspiration", missing), missing)
             ))
         end
     end
