@@ -1,9 +1,10 @@
+include("../src/TCX2Graph.jl")
 using Revise
-using TCX2Graph
 using ProgressMeter
 using DataFrames
 using CSV
 using Dates
+using JSON
 
 const OUTPUT_DIR = "case_study_1_outputs"
 const SEGMENT_LENGTH_M = 1000.0
@@ -35,7 +36,8 @@ function find_most_repeated_segments()
 
     # 2. Fetch data from Neo4j
     println("Fetching data from Neo4j...")
-    graph, all_gps_data, paths, paths_files = build_graph_from_neo4j()
+    # `missing` for tcx_files triggers Neo4j fetch. `add_features` is false as data is already processed.
+    graph, all_gps_data, paths, paths_files = TCX2Graph.create_property_graph(missing, false)
     num_rides = length(paths)
     println("Loaded data for $num_rides rides.")
 
@@ -50,18 +52,22 @@ function find_most_repeated_segments()
 
     @showprogress "Processing rides..." for i in 1:num_rides
         try
-           segments, _ = find_overlapping_segments(
+           segments, _ = TCX2Graph.find_overlapping_segments(
                 all_gps_data,
                 paths,
                 ref_ride_idx=i,
                 max_length_m=SEGMENT_LENGTH_M,
                 tol_m=FRECHET_TOLERANCE_M,
                 min_runs=MIN_REPETITIONS,
-                window_step=1,
+                window_step=10, # Use a larger step to speed up, can be 1 for full detail
                 prefilter_margin_m=100.0,
-                dedup_overlap_frac=0.1
+                dedup_overlap_frac=0.5
             )
             if !isempty(segments)
+                # Add reference ride info to each segment
+                for seg in segments
+                    seg["ref_ride_idx"] = i
+                end
                 push!(all_found_segments, segments...)
             end
         catch e
@@ -78,46 +84,48 @@ function find_most_repeated_segments()
     println("Identifying the most repeated segment(s)...")
 
     # 4. Find the segment with the maximum number of runs
-    max_runs = 0
-    top_segments = []
+    sort!(all_found_segments, by = s -> length(s["run_ranges"]), rev=true)
 
-    for seg in all_found_segments
-        num_runs = length(seg["run_ranges"])
-        if num_runs > max_runs
-            max_runs = num_runs
-            top_segments = [seg] # New top segment found
-        elseif num_runs == max_runs
-            # Check for duplicates before adding
-            is_duplicate = false
-            for existing_seg in top_segments
-                # Use Frechet distance to check if they are geometrically similar
-                df = discrete_frechet(seg["candidate_polyline"], existing_seg["candidate_polyline"])
-                if df <= FRECHET_TOLERANCE_M
-                    is_duplicate = true
-                    break
-                end
-            end
-            if !is_duplicate
-                push!(top_segments, seg)
-            end
-        end
-    end
-
-    if isempty(top_segments)
+    if isempty(all_found_segments)
         println("Could not identify a top segment.")
         return
     end
 
-    println("Found $(length(top_segments)) top segment(s) with $max_runs repetitions.")
+    max_runs = length(all_found_segments[1]["run_ranges"])
+    println("Top segment candidate has $max_runs repetitions. Filtering for similar top segments.")
+
+    top_segments = [all_found_segments[1]]
+    for seg in all_found_segments[2:end]
+        if length(seg["run_ranges"]) < max_runs
+            break # Since it's sorted, no more segments will have max_runs
+        end
+
+        is_duplicate = false
+        for existing_seg in top_segments
+            # Use Frechet distance to check if they are geometrically similar
+            df = TCX2Graph.discrete_frechet(seg["candidate_polyline"], existing_seg["candidate_polyline"])
+            if df <= FRECHET_TOLERANCE_M
+                is_duplicate = true
+                break
+            end
+        end
+        if !is_duplicate
+            push!(top_segments, seg)
+        end
+    end
+
+
+    println("Found $(length(top_segments)) unique top segment(s) with $max_runs repetitions.")
 
     # 5. Save results to CSV
-    csv_path = joinpath(csv_dir, "top_segments.csv")
+    csv_path = joinpath(csv_dir, "top_segments_summary.csv")
     df_rows = []
     for (i, seg) in enumerate(top_segments)
         start_pt_idx = first(seg["ref_range"])
         end_pt_idx = last(seg["ref_range"])
         start_gps = all_gps_data[start_pt_idx]
         end_gps = all_gps_data[end_pt_idx]
+        ref_ride_path_range = paths[seg["ref_ride_idx"]]
 
         push!(df_rows, (
             segment_id = i,
@@ -127,26 +135,36 @@ function find_most_repeated_segments()
             start_lon = start_gps["longitude"],
             end_lat = end_gps["latitude"],
             end_lon = end_gps["longitude"],
-            ref_file = paths_files[paths[findfirst(p -> start_pt_idx in p, paths)]]
+            ref_file = paths_files[ref_ride_path_range]
         ))
     end
     df = DataFrame(df_rows)
     CSV.write(csv_path, df)
     println("Saved top segment(s) info to: $csv_path")
 
-    # 6. Generate visualizations
+    # 6. Generate visualizations and detailed CSVs
     for (i, seg) in enumerate(top_segments)
-        vis_path = joinpath(vis_dir, "segment_$(i)_runs")
+        # Generate visualization
+        vis_path = joinpath(vis_dir, "segment_$(i)_runs.html")
         println("Visualizing segment $i with $max_runs runs at: $vis_path")
         try
-            visualize_segment_runs(
+            TCX2Graph.visualize_segment_runs(
                 seg,
                 all_gps_data,
                 paths_files,
-                output_dir=vis_path
+                output_path=vis_path
             )
         catch e
             println("Failed to visualize segment $i: $e")
+        end
+
+        # Generate detailed CSV for the segment
+        csv_detail_path = joinpath(csv_dir, "segment_$(i)_runs_details.csv")
+        println("Exporting detailed runs for segment $i to: $csv_detail_path")
+        try
+            TCX2Graph.process_segment_runs(seg, all_gps_data, csv_detail_path)
+        catch e
+            println("Failed to export CSV for segment $i: $e")
         end
     end
 
