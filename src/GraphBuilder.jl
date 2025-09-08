@@ -1,4 +1,5 @@
 using Graphs
+using MetaGraphs  # added to enable metadata-aware graphs
 
 export create_property_graph
 
@@ -28,7 +29,8 @@ and a vector representing the vertex ranges for each path (i.e., each TCX file).
 
 """
 function create_property_graph(tcx_files::Union{Vector{String}, Missing}, add_features::Bool=false)
-    graph = SimpleGraph()
+    graph = MetaDiGraph(DiGraph(0))
+
     all_gps_data = Dict{Int, Dict{String, Any}}()
     paths = Vector{UnitRange{Int64}}()
     paths_files = Dict{UnitRange{Int64}, String}()
@@ -47,7 +49,6 @@ function create_property_graph(tcx_files::Union{Vector{String}, Missing}, add_fe
     println("Processing $(length(tcx_files)) TCX files...")
 
     for (index, tcx_file_path) in enumerate(tcx_files)
-        # Read GPS points from the correct data source
         gps_points = use_neo4j ? fetch_gps_data_from_neo4j(tcx_file_path) :
                                  read_tcx_gps_points(tcx_file_path, add_features)
 
@@ -57,15 +58,24 @@ function create_property_graph(tcx_files::Union{Vector{String}, Missing}, add_fe
         end
 
         start_index = nv(graph) + 1
-        add_vertices!(graph, length(gps_points))
+        for _ in 1:length(gps_points)
+            add_vertex!(graph)
+        end
 
-        for i in 1:length(gps_points) - 1
+        for i in 1:(length(gps_points)-1)
             add_edge!(graph, start_index + i - 1, start_index + i)
         end
 
         for (i, gps) in enumerate(gps_points)
             vertex_index = start_index + i - 1
-            all_gps_data[vertex_index] = gps  # Store all properties
+            for (k, v) in gps
+                try
+                    set_prop!(graph, vertex_index, Symbol(k), v)
+                catch
+                    @warn "Failed to set property $k for vertex $vertex_index: $v"
+                end
+            end
+            all_gps_data[vertex_index] = gps
         end
 
         push!(paths, start_index:(start_index + length(gps_points) - 1))

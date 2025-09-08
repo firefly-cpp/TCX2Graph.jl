@@ -273,143 +273,142 @@ function process_segments_aggregated(
     return out
 end
 
-local function _epoch_seconds(t)
-    if t === nothing || ismissing(t)
-        return missing
-    elseif t isa DateTime
-        return Dates.value(t - DateTime(1970,1,1)) / 1000.0
-    elseif t isa Number
-        return Float64(t)
-    else
-        return missing
-    end
-end
-
-function process_segment_transitions(
-    path_segments::Vector{Dict{String, Any}},
-    gps_data::Dict{Int, Dict{String, Any}},
+function process_run_level_transitions_global(
+    overlapping_segments::Vector{Dict{String,Any}},
+    gps_data::Dict{Int, Dict{String,Any}};
+    max_dist_m::Float64 = 300.0,
+    max_gap_s::Float64 = 3600.0,
     missing_threshold::Float64 = 99.0
 )::DataFrame
-    seg_df = process_segments_aggregated(path_segments, gps_data, missing_threshold)
-    if isempty(seg_df)
-        return DataFrame()
+
+    local function _epoch_seconds_any(x)
+        if x === nothing || ismissing(x) return missing end
+        x isa Number && return Float64(x)
+        x isa DateTime && return Dates.value(x - DateTime(1970,1,1)) / 1000.0
+        x isa String && return convert_time(x)
+        return missing
     end
 
-    seg_map = Dict{Int, Dict{String,Any}}()
-    for r in eachrow(seg_df)
-        idx = Int(r[:segment_index])
-        seg_map[idx] = Dict(Symbol(k) => r[k] for k in names(seg_df))
-    end
+    local function summarize_run(run_data::Vector{Dict{String,Any}})
+        isempty(run_data) && return nothing
 
-    function oriented_endpoints(seg::Dict{String,Any})
-        ref_range = seg["ref_range"]
-        orientation = get(seg, "orientation", :forward)
-        if orientation == :forward
-            sidx, eidx = first(ref_range), last(ref_range)
-        else
-            sidx, eidx = last(ref_range), first(ref_range)
+        spt = run_data[1]; ept = run_data[end]
+        fn  = get(spt, "file_name", missing)
+        st  = _epoch_seconds_any(get(spt, "time", missing))
+        et  = _epoch_seconds_any(get(ept, "time", missing))
+        s_lat = get(spt, "latitude", missing); s_lon = get(spt, "longitude", missing)
+        e_lat = get(ept, "latitude", missing); e_lon = get(ept, "longitude", missing)
+
+        df = DataFrame(run_data)
+        row = Dict{String,Any}()
+        row["file_name"] = fn
+        row["start_time"] = st
+        row["end_time"] = et
+        row["start_lat"] = s_lat
+        row["start_lon"] = s_lon
+        row["end_lat"] = e_lat
+        row["end_lon"] = e_lon
+        row["num_trackpoints"] = nrow(df)
+
+        for col in names(df)
+            if col in ["file_name","latitude","longitude","time"]
+                continue
+            end
+            colvec = df[!, col]
+            nm = collect(skipmissing(colvec))
+            isempty(nm) && continue
+            if nonmissingtype(eltype(colvec)) <: Number
+                row["$(col)_mean"] = mean(nm)
+            elseif nonmissingtype(eltype(colvec)) <: AbstractString
+                filtered = filter(x -> x != "unknown", nm)
+                row["$(col)_mode"] = isempty(filtered) ? "unknown" : mode(filtered)
+            end
         end
-        spt, ept = gps_data[sidx], gps_data[eidx]
-        return (spt, ept)
+        return row
+    end
+
+    runs_by_ride = Dict{String, Vector{Dict{String,Any}}}()
+    for (seg_idx, seg) in enumerate(overlapping_segments)
+        seg_runs = extract_single_segment_runs(seg, gps_data)
+        for run in seg_runs
+            rsum = summarize_run(run["run_data"])
+            rsum === nothing && continue
+            rsum["segment_index"] = get(seg, "segment_index", seg_idx)
+            fn = get(rsum, "file_name", missing)
+            ismissing(fn) && continue
+            push!(get!(runs_by_ride, fn, Vector{Dict{String,Any}}()), rsum)
+        end
     end
 
     rows = Vector{Dict{String,Any}}()
-    for i in 1:(length(path_segments)-1)
-        seg_from = path_segments[i]
-        seg_to   = path_segments[i+1]
+    for (fn, rvec) in runs_by_ride
+        have_time = filter(r -> !ismissing(get(r, "start_time", missing)), rvec)
+        isempty(have_time) && continue
+        sort!(have_time, by = r -> r["start_time"])
+        for i in 1:(length(have_time)-1)
+            from_run = have_time[i]; to_run = have_time[i+1]
 
-        idx_from = get(seg_from, "segment_index", i)
-        idx_to   = get(seg_to, "segment_index", i+1)
+            dist = (haskey(from_run, "end_lat") && haskey(from_run, "end_lon") &&
+                    haskey(to_run, "start_lat") && haskey(to_run, "start_lon") &&
+                    !(ismissing(from_run["end_lat"]) || ismissing(from_run["end_lon"]) ||
+                      ismissing(to_run["start_lat"]) || ismissing(to_run["start_lon"]))) ?
+                haversine_distance(from_run["end_lat"], from_run["end_lon"], to_run["start_lat"], to_run["start_lon"]) :
+                missing
 
-        from_row = get(seg_map, idx_from, Dict{Symbol,Any}())
-        to_row   = get(seg_map, idx_to, Dict{Symbol,Any}())
+            gap = (ismissing(from_run["end_time"]) || ismissing(to_run["start_time"])) ? missing :
+                  (to_run["start_time"] - from_run["end_time"])
 
-        row = Dict{String,Any}()
-        row["order_index"]        = i
-        row["from_segment_index"] = idx_from
-        row["to_segment_index"]   = idx_to
-        row["from_segment_name"]  = "segment_$(idx_from)"
-        row["to_segment_name"]    = "segment_$(idx_to)"
+            if !(ismissing(dist)) && dist > max_dist_m
+                continue
+            end
+            if !(ismissing(gap)) && abs(gap) > max_gap_s
+                continue
+            end
 
-        row["from_ref_tcx_file"]  = get(from_row, :ref_tcx_file, missing)
-        row["to_ref_tcx_file"]    = get(to_row, :ref_tcx_file, missing)
-        row["from_ref_start_idx"] = get(from_row, :ref_start_idx, missing)
-        row["from_ref_end_idx"]   = get(from_row, :ref_end_idx, missing)
-        row["to_ref_start_idx"]   = get(to_row, :ref_start_idx, missing)
-        row["to_ref_end_idx"]     = get(to_row, :ref_end_idx, missing)
-
-        latmins = [get(from_row, :lat_min, missing), get(to_row, :lat_min, missing)]
-        latmaxs = [get(from_row, :lat_max, missing), get(to_row, :lat_max, missing)]
-        lonmins = [get(from_row, :lon_min, missing), get(to_row, :lon_min, missing)]
-        lonmaxs = [get(from_row, :lon_max, missing), get(to_row, :lon_max, missing)]
-
-        if any(ismissing, latmins) || any(ismissing, latmaxs) || any(ismissing, lonmins) || any(ismissing, lonmaxs)
-            row["lat_min"] = missing; row["lat_max"] = missing
-            row["lon_min"] = missing; row["lon_max"] = missing
-            row["latitude"]  = missing; row["longitude"] = missing
-        else
-            row["lat_min"] = minimum(latmins)
-            row["lat_max"] = maximum(latmaxs)
-            row["lon_min"] = minimum(lonmins)
-            row["lon_max"] = maximum(lonmaxs)
-            row["latitude"]  = (row["lat_min"] + row["lat_max"]) / 2
-            row["longitude"] = (row["lon_min"] + row["lon_max"]) / 2
-        end
-
-        (from_spt, from_ept) = oriented_endpoints(seg_from)
-        (to_spt, _to_ept)    = oriented_endpoints(seg_to)
-        if haskey(from_ept, "latitude") && haskey(to_spt, "latitude")
-            row["transition_distance_m"] = haversine_distance(
-                from_ept["latitude"], from_ept["longitude"], to_spt["latitude"], to_spt["longitude"]
+            row = Dict{String,Any}(
+                "file_name" => fn,
+                "order_index_in_file" => i,
+                "from_segment_index" => from_run["segment_index"],
+                "to_segment_index" => to_run["segment_index"],
+                "transition_distance_m" => dist,
+                "transition_time_gap_s" => gap,
             )
-        else
-            row["transition_distance_m"] = missing
-        end
-        t_from_end = haskey(from_ept, "time") ? _epoch_seconds(from_ept["time"]) : missing
-        t_to_start = haskey(to_spt, "time")   ? _epoch_seconds(to_spt["time"])   : missing
-        row["transition_time_gap_s"] = (ismissing(t_from_end) || ismissing(t_to_start)) ? missing : (t_to_start - t_from_end)
 
-        for col in names(seg_df)
-            if endswith(col, "_mean")
-                row["from_$(col)"] = get(from_row, Symbol(col), missing)
-                row["to_$(col)"]   = get(to_row,   Symbol(col), missing)
-            end
-            if endswith(col, "_mode")
-                row["from_$(col)"] = get(from_row, Symbol(col), missing)
-                row["to_$(col)"]   = get(to_row,   Symbol(col), missing)
-            end
-        end
-
-        for col in names(seg_df)
-            if endswith(col, "_mean")
-                base = first(split(col, "_mean"))
-                from_val = get(from_row, Symbol(col), missing)
-                to_val   = get(to_row, Symbol(col), missing)
-                if !(ismissing(from_val) || ismissing(to_val))
-                    row["delta_$(base)_mean"] = to_val - from_val
+            all_keys = union(collect(keys(from_run)), collect(keys(to_run)))
+            for k in all_keys
+                if endswith(k, "_mean") || endswith(k, "_mode")
+                    row["from_$(k)"] = get(from_run, k, missing)
+                    row["to_$(k)"]   = get(to_run,   k, missing)
                 end
             end
+            for k in all_keys
+                if endswith(k, "_mean")
+                    base = first(split(k, "_mean"))
+                    fv = get(from_run, k, missing)
+                    tv = get(to_run,   k, missing)
+                    if !(ismissing(fv) || ismissing(tv))
+                        row["delta_$(base)_mean"] = tv - fv
+                    end
+                end
+            end
+
+            push!(rows, row)
         end
-
-        push!(rows, row)
     end
 
-    if isempty(rows)
-        return DataFrame()
-    end
+    isempty(rows) && return DataFrame()
 
     out = DataFrame()
     for r in rows
-        push!(out, r, cols=:union)
+        push!(out, r, cols = :union)
     end
 
-    println("CS3 initial transition-level dataset size: ", size(out))
+    println("Global transitions (run-level) initial size: ", size(out))
     out = remove_fully_missing_features(out)
     out = remove_high_missing_features(out, missing_threshold)
-    println("CS3 dataset size after feature removal: ", size(out))
+    println("Global transitions size after feature removal: ", size(out))
     remove_constant_unknown_features!(out)
     check_and_fix_dataframe!(out)
-    println("CS3 final transition-level dataset size: ", size(out))
-
+    println("Global transitions final size: ", size(out))
     return out
 end

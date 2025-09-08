@@ -18,7 +18,7 @@ function main()
 
     # If reading from :files, choose whether to add features from OSM and weather APIs.
     # This is ignored if DATA_SOURCE is :neo4j, as data is assumed to be pre-processed.
-    ADD_EXTERNAL_FEATURES = true
+    ADD_EXTERNAL_FEATURES = false
 
     # --- Case Study Selection ---
     # 1: Single Segment Analysis (generates segment_runs_cleaned.csv for one segment)
@@ -35,17 +35,17 @@ function main()
     # Path to the folder containing TCX files. Only used if DATA_SOURCE is :files.
     tcx_folder_path = "../example_data/files"
     # The reference ride for segment detection. This filename must exist in your chosen DATA_SOURCE.
-    target_file = "activity_12171312300.tcx"
+    target_file = "50.tcx"
 
     # --- Case Study 1 Parameters ---
-    segment_to_analyze_idx = 21
+    segment_to_analyze_idx = 1
     # Missing-value removal threshold for Case Study 1 (trackpoint-level CSV)
     CS1_MISSING_THRESHOLD = 99.0
 
     # --- Overlapping Segment Detection Parameters ---
     segment_max_length_m = 1000.0 # Max length of a candidate segment in meters
-    segment_tolerance_m = 200.0   # Max Frechet distance for a segment to be considered an overlap
-    segment_min_runs = 3          # A segment must appear in at least this many rides to be detected
+    segment_tolerance_m = 100.0   # Max Frechet distance for a segment to be considered an overlap
+    segment_min_runs = 50          # A segment must appear in at least this many rides to be detected
     prefilter_margin_m = 100.0    # Broad-phase filter for rides; only rides within this margin are checked
     dedup_overlap_frac = 0.1      # Deduplicate segments if they overlap by more than this fraction
 
@@ -88,7 +88,27 @@ function main()
     end
 
     # Visualize the complete property graph with all loaded rides
-    TCX2Graph.plot_property_graph(gps_data, paths, "./example_data/all_plots/multi_tcx_graph_property.html")
+    props_set = Set{String}()
+    for v in values(gps_data)
+        for k in keys(v)
+            push!(props_set, String(k))
+        end
+    end
+    props_list = collect(props_set)
+
+    viewer_path = TCX2Graph.plot_property_graph(
+        graph,
+        gps_data;
+        out_dir = "./example_data/all_plots/leaflet_viewer",
+        simplify_tolerance_m = 0.0,
+        quantize_decimals = 5,
+        min_points = 2,
+        export_point_properties = true,
+        properties_whitelist = props_list,
+        sample_rate = 1,
+        max_points_per_file = 40000
+    )
+    # Serve via a local server: cd './example_data/all_plots/leaflet_viewer'; python3 -m http.server
 
     # Verify that the target_file for reference exists in the loaded data
     if !(target_file in basename.(values(paths_files)))
@@ -108,6 +128,7 @@ function main()
         ref_ride_idx = ref_ride_idx,
         max_length_m = segment_max_length_m,
         tol_m = segment_tolerance_m,
+        window_step = 1,
         min_runs = segment_min_runs,
         prefilter_margin_m = prefilter_margin_m,
         dedup_overlap_frac = dedup_overlap_frac
@@ -208,43 +229,26 @@ function main()
         end
 
     elseif CASE_STUDY == 3
-        println("\n--- Running Case Study 3: Transition Analysis ---")
+        println("\n--- Running Case Study 3: Transition Analysis (Global, Run-Level) ---")
 
-        # --- 4a. PATHFINDING (Only for Case Study 3) ---
-        println("\n--- Finding Path Between Segments ---")
-        path_segments = []
-        if isempty(overlapping_segments) || max(start_segment_idx, end_segment_idx) > length(overlapping_segments)
-            println("Warning: Not enough segments found to perform pathfinding with the given indices.")
+        # No pathfinding needed; use all detected overlapping segments and all rides.
+        if isempty(overlapping_segments)
+            println("No overlapping segments found to analyze for Case Study 3.")
         else
-            start_segment = overlapping_segments[start_segment_idx]
-            end_segment = overlapping_segments[end_segment_idx]
-            try
-                path_segments = TCX2Graph.find_path_between_segments(
-                    start_segment, end_segment, overlapping_segments, gps_data;
-                    min_length = path_min_length,
-                    path_min_runs = path_min_runs,
-                    tolerance_m = path_tolerance_m
-                )
-                println("Path found with $(length(path_segments)) segments.")
-                TCX2Graph.plot_path_with_segments(gps_data, paths, path_segments, "./example_data/path_plots/path_segments.html")
-            catch e
-                println("Error finding path: ", e)
-            end
-        end
-
-        # --- 4b. TRANSITION FEATURE AGGREGATION (one row per transition) ---
-        if !isempty(path_segments)
-            println("\n--- Aggregating features for transitions along the path ---")
-            transitions_df = TCX2Graph.process_segment_transitions(path_segments, gps_data, CS3_MISSING_THRESHOLD)
-            if !isempty(transitions_df)
-                mkpath("./example_data/path_csv/")
-                CSV.write("./example_data/path_csv/path_transitions_features.csv", transitions_df)
-                println("Transition-level features saved to: ./example_data/path_csv/path_transitions_features.csv")
+            println("\n--- Building global, per-run transitions across all rides ---")
+            mkpath("./example_data/transitions_csv/")
+            global_df = TCX2Graph.process_run_level_transitions_global(
+                overlapping_segments, gps_data;
+                max_dist_m = 300.0,
+                max_gap_s = 3600.0,
+                missing_threshold = CS3_MISSING_THRESHOLD
+            )
+            if !isempty(global_df)
+                CSV.write("./example_data/transitions_csv/run_transitions_features.csv", global_df)
+                println("Run-level transitions saved to: ./example_data/transitions_csv/run_transitions_features.csv")
             else
-                println("No transition features produced.")
+                println("No run-level transitions produced.")
             end
-        else
-            println("No path found to analyze for Case Study 3.")
         end
     else
         println("Invalid CASE_STUDY selection. Please choose 1, 2, or 3.")
