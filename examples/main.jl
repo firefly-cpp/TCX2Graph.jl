@@ -88,6 +88,7 @@ function main()
     end
 
     # Visualize the complete property graph with all loaded rides
+    #=
     props_set = Set{String}()
     for v in values(gps_data)
         for k in keys(v)
@@ -109,8 +110,12 @@ function main()
         max_points_per_file = 40000
     )
     # Serve via a local server: cd './example_data/all_plots/leaflet_viewer'; python3 -m http.server
-
+    =#
     # Verify that the target_file for reference exists in the loaded data
+
+    result = TCX2Graph.compute_unique_coverage_km(gps_data, paths; quantize_m=10.0)
+    println(result)
+
     if !(target_file in basename.(values(paths_files)))
         error("The specified target_file '$target_file' was not found in the data source.")
     end

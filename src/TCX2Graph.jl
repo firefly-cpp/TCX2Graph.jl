@@ -21,5 +21,7 @@ include("SegmentRuns.jl")
 include("Neo4jUtils.jl")
 include("DataPreprocessing.jl")
 include("PathVisualizer.jl")
+include("GraphUtils.jl")
 
 end
+

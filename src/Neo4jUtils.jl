@@ -24,7 +24,7 @@ function fetch_tcx_filenames_from_neo4j()
 			RETURN DISTINCT t.tcx_file
 			"""
 			payload = JSON3.write(Dict("statements" => [Dict("statement" => query)]))
-			response = HTTP.post(url, HEADERS, payload)
+			response = HTTP.post(url, HEADERS, payload; readtimeout=300, reuse_limit=0, retry=false)
 			parsed = JSON3.read(String(response.body))
 
 			records = parsed[:results][1][:data]
@@ -62,7 +62,7 @@ function fetch_gps_data_from_neo4j(tcx_filename::String)::Vector{Dict{String, An
 	"""
 
 	payload = JSON3.write(Dict("statements" => [Dict("statement" => query, "parameters" => Dict("tcx_file" => tcx_filename))]))
-	response = HTTP.post(url, HEADERS, payload; reuse_limit=0)
+	response = HTTP.post(url, HEADERS, payload; reuse_limit=0, readtimeout=300, retry=false)
 	parsed = JSON3.read(String(response.body))
 
 	gps_points = []
