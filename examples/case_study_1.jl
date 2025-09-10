@@ -9,7 +9,7 @@ using JSON
 const OUTPUT_DIR = "case_study_1_outputs"
 const SEGMENT_LENGTH_M = 1000.0
 const FRECHET_TOLERANCE_M = 100.0
-const MIN_REPETITIONS = 50 # Minimum number of runs to be considered a candidate
+const MIN_REPETITIONS = 60 # Minimum number of runs to be considered a candidate
 
 # --- Main Logic ---
 
@@ -46,34 +46,43 @@ function find_most_repeated_segments()
         return
     end
 
-    # 3. Find all overlapping segments
+    # 3. Find all overlapping segments using an optimized approach
     all_found_segments = []
     println("Searching for $SEGMENT_LENGTH_M-meter segments across all rides...")
 
-    @showprogress "Processing rides..." for i in 1:num_rides
-        try
-           segments, _ = TCX2Graph.find_overlapping_segments(
-                all_gps_data,
-                paths,
-                ref_ride_idx=i,
-                max_length_m=SEGMENT_LENGTH_M,
-                tol_m=FRECHET_TOLERANCE_M,
-                min_runs=MIN_REPETITIONS,
-                window_step=10, # Use a larger step to speed up, can be 1 for full detail
-                prefilter_margin_m=100.0,
-                dedup_overlap_frac=0.5
-            )
-            if !isempty(segments)
-                # Add reference ride info to each segment
-                for seg in segments
-                    seg["ref_ride_idx"] = i
-                end
-                push!(all_found_segments, segments...)
+    # --- OPTIMIZATION: Find the best reference ride first ---
+    best_ref_ride_idx = TCX2Graph.find_best_ref_ride(
+        all_gps_data,
+        paths,
+        grid_size_m=50.0,
+        min_reps_for_hotspot=MIN_REPETITIONS
+    )
+    ref_ride_filename = paths_files[paths[best_ref_ride_idx]]
+    println("Using single best reference ride: #$best_ref_ride_idx ('$ref_ride_filename')")
+
+    try
+        segments, _ = TCX2Graph.find_overlapping_segments(
+            all_gps_data,
+            paths,
+            ref_ride_idx=best_ref_ride_idx,
+            max_length_m=SEGMENT_LENGTH_M,
+            tol_m=FRECHET_TOLERANCE_M,
+            min_runs=MIN_REPETITIONS,
+            window_step=10, # Use a larger step to speed up, can be 1 for full detail
+            prefilter_margin_m=100.0,
+            dedup_overlap_frac=0.5
+        )
+        if !isempty(segments)
+            # Add reference ride info to each segment
+            for seg in segments
+                seg["ref_ride_idx"] = best_ref_ride_idx
             end
-        catch e
-            println("Could not process ride $i as reference: $e")
+            push!(all_found_segments, segments...)
         end
+    catch e
+        println("Could not process ride $best_ref_ride_idx as reference: $e")
     end
+
 
     if isempty(all_found_segments)
         println("No repeated segments found with at least $MIN_REPETITIONS repetitions. Try lowering the threshold.")

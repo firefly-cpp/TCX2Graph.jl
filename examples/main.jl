@@ -14,7 +14,7 @@ function main()
 
     # --- Data Source and Feature Enrichment ---
     # Choose the source of the data. Options: :files, :neo4j
-    DATA_SOURCE = :files
+    DATA_SOURCE = :neo4j
 
     # If reading from :files, choose whether to add features from OSM and weather APIs.
     # This is ignored if DATA_SOURCE is :neo4j, as data is assumed to be pre-processed.
@@ -35,7 +35,7 @@ function main()
     # Path to the folder containing TCX files. Only used if DATA_SOURCE is :files.
     tcx_folder_path = "../example_data/files"
     # The reference ride for segment detection. This filename must exist in your chosen DATA_SOURCE.
-    target_file = "50.tcx"
+    target_file = "48.tcx"
 
     # --- Case Study 1 Parameters ---
     segment_to_analyze_idx = 1
@@ -45,8 +45,8 @@ function main()
     # --- Overlapping Segment Detection Parameters ---
     segment_max_length_m = 1000.0 # Max length of a candidate segment in meters
     segment_tolerance_m = 100.0   # Max Frechet distance for a segment to be considered an overlap
-    segment_min_runs = 50          # A segment must appear in at least this many rides to be detected
-    prefilter_margin_m = 100.0    # Broad-phase filter for rides; only rides within this margin are checked
+    segment_min_runs = 90          # A segment must appear in at least this many rides to be detected
+    prefilter_margin_m = 1.0    # Broad-phase filter for rides; only rides within this margin are checked
     dedup_overlap_frac = 0.1      # Deduplicate segments if they overlap by more than this fraction
 
     # --- Pathfinding Parameters (only used for Case Study 2) ---
@@ -104,15 +104,13 @@ function main()
         simplify_tolerance_m = 0.0,
         quantize_decimals = 5,
         min_points = 2,
-        export_point_properties = true,
-        properties_whitelist = props_list,
+        export_point_properties = false,
+        properties_whitelist = nothing,
         sample_rate = 1,
         max_points_per_file = 40000
     )
     # Serve via a local server: cd './example_data/all_plots/leaflet_viewer'; python3 -m http.server
     =#
-    # Verify that the target_file for reference exists in the loaded data
-
     result = TCX2Graph.compute_unique_coverage_km(gps_data, paths; quantize_m=10.0)
     println(result)
 
@@ -136,7 +134,9 @@ function main()
         window_step = 1,
         min_runs = segment_min_runs,
         prefilter_margin_m = prefilter_margin_m,
-        dedup_overlap_frac = dedup_overlap_frac
+        dedup_overlap_frac = dedup_overlap_frac,
+        show_progress = true,
+        progress_dt_s = 0.5
     )
     println("Found $(length(overlapping_segments)) overlapping segments.")
 

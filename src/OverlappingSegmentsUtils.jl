@@ -1,5 +1,6 @@
 using Base.Threads
 using StaticArrays
+using ProgressMeter
 
 export find_overlapping_segments
 
@@ -73,7 +74,9 @@ function find_overlapping_segments(
 	window_step::Int = 1,
 	min_runs::Int = 2,
 	prefilter_margin_m::Float64 = 5.0,
-	dedup_overlap_frac::Float64 = 0.8,   # if 80% or more of indices overlap, consider duplicate
+	dedup_overlap_frac::Float64 = 0.8,
+    show_progress::Bool = false,
+    progress_dt_s::Float64 = 0.5
 )::Tuple{Vector{Dict{String, Any}}, Vector{Int}}
 	results = Vector{Dict{String, Any}}()
 	ref_indices = collect(paths[ref_ride_idx])
@@ -117,12 +120,31 @@ function find_overlapping_segments(
 	ride_kdtrees = [create_ride_kdtree(paths[p], all_gps_data) for p in close_ride_indices]
 	ride_idx_map = Dict(p_idx => i for (i, p_idx) in enumerate(close_ride_indices))
 
-	@threads for s in 1:window_step:length(ref_indices)
+    valid_starts = Int[]
+    for s in 1:window_step:length(ref_indices)
+        e = s
+        while e <= length(ref_indices) && (cum[e] - cum[s]) < max_length_m
+            e += 1
+        end
+        if e <= length(ref_indices)
+            push!(valid_starts, s)
+        end
+    end
+    total_jobs = length(valid_starts)
+    if show_progress
+        println("Scanning $total_jobs candidate windows (step=$window_step) ...")
+    end
+    prog = show_progress ? Progress(total_jobs; desc="Finding overlapping segments", dt=progress_dt_s) : nothing
+
+	@threads for idx in 1:total_jobs
+        s = valid_starts[idx]
+
 		e = s
 		while e <= length(ref_indices) && (cum[e] - cum[s]) < max_length_m
 			e += 1
 		end
 		if e > length(ref_indices)
+            if show_progress; next!(prog); end
 			continue
 		end
 
@@ -136,6 +158,9 @@ function find_overlapping_segments(
 		lon_min, lon_max = minimum(lons), maximum(lons)
 		center = SVector((lon_min + lon_max) / 2, (lat_min + lat_max) / 2)
 		half_diag = sqrt(((lon_max - lon_min) / 2)^2 + ((lat_max - lat_min) / 2)^2)
+		m_to_deg = 1.0 / 111000.0
+		tol_deg = tol_m * m_to_deg
+		prefilter_margin_deg = prefilter_margin_m * m_to_deg
 		radius = half_diag + tol_deg + prefilter_margin_deg
 
 		run_ranges = Dict{Int, UnitRange{Int64}}()
@@ -154,11 +179,9 @@ function find_overlapping_segments(
 		end
 
 		if count_found >= min_runs
-
 			duplicate = false
 			lock(result_lock) do
 				for cand in results
-
 					common = length(intersect(candidate_range, cand["ref_range"]))
 					frac = common / min(length(candidate_range), length(cand["ref_range"]))
 					if frac >= dedup_overlap_frac
@@ -168,20 +191,26 @@ function find_overlapping_segments(
 				end
 			end
 
-			if duplicate
-				continue
-			end
-
-			lock(result_lock) do
-				push!(results, Dict(
-					"ref_range" => candidate_range,
-					"run_ranges" => run_ranges,
-					"candidate_length" => candidate_length,
-					"candidate_polyline" => candidate_polyline,
-				))
+			if !duplicate
+				lock(result_lock) do
+					push!(results, Dict(
+						"ref_range" => candidate_range,
+						"run_ranges" => run_ranges,
+						"candidate_length" => candidate_length,
+						"candidate_polyline" => candidate_polyline,
+					))
+				end
 			end
 		end
+
+        if show_progress
+            next!(prog)
+        end
 	end
+
+    if show_progress
+        finish!(prog)
+    end
 
 	return results, close_ride_indices
 end
