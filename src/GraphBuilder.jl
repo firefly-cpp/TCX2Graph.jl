@@ -1,5 +1,7 @@
 using Graphs
-using MetaGraphs  # added to enable metadata-aware graphs
+using MetaGraphs
+using Base.Threads
+using ProgressMeter
 
 export create_property_graph
 
@@ -48,38 +50,81 @@ function create_property_graph(tcx_files::Union{Vector{String}, Missing}, add_fe
 
     println("Processing $(length(tcx_files)) TCX files...")
 
-    for (index, tcx_file_path) in enumerate(tcx_files)
-        gps_points = use_neo4j ? fetch_gps_data_from_neo4j(tcx_file_path) :
-                                 read_tcx_gps_points(tcx_file_path, add_features)
-
-        if isnothing(gps_points) || isempty(gps_points)
-            println("Skipping file: $tcx_file_path (No valid trackpoints).")
-            continue
+    if use_neo4j
+        all_files_gps_points = Vector{Vector{Dict{String, Any}}}(undef, length(tcx_files))
+        @threads for i in 1:length(tcx_files)
+            all_files_gps_points[i] = fetch_gps_data_from_neo4j(tcx_files[i])
         end
 
-        start_index = nv(graph) + 1
-        for _ in 1:length(gps_points)
-            add_vertex!(graph)
-        end
+        println("Building graph from fetched data...")
+        flush(stdout)
+        build_prog = Progress(length(all_files_gps_points), desc="Building Graph   ")
 
-        for i in 1:(length(gps_points)-1)
-            add_edge!(graph, start_index + i - 1, start_index + i)
-        end
-
-        for (i, gps) in enumerate(gps_points)
-            vertex_index = start_index + i - 1
-            for (k, v) in gps
-                try
-                    set_prop!(graph, vertex_index, Symbol(k), v)
-                catch
-                    @warn "Failed to set property $k for vertex $vertex_index: $v"
-                end
+        for (index, gps_points) in enumerate(all_files_gps_points)
+            tcx_file_path = tcx_files[index]
+            if isnothing(gps_points) || isempty(gps_points)
+                next!(build_prog)
+                continue
             end
-            all_gps_data[vertex_index] = gps
-        end
 
-        push!(paths, start_index:(start_index + length(gps_points) - 1))
-        paths_files[start_index:(start_index + length(gps_points) - 1)] = tcx_file_path
+            start_index = nv(graph) + 1
+            for _ in 1:length(gps_points)
+                add_vertex!(graph)
+            end
+
+            for i in 1:(length(gps_points)-1)
+                add_edge!(graph, start_index + i - 1, start_index + i)
+            end
+
+            for (i, gps) in enumerate(gps_points)
+                vertex_index = start_index + i - 1
+                for (k, v) in gps
+                    try
+                        set_prop!(graph, vertex_index, Symbol(k), v)
+                    catch
+                        @warn "Failed to set property $k for vertex $vertex_index: $v"
+                    end
+                end
+                all_gps_data[vertex_index] = gps
+            end
+
+            push!(paths, start_index:(start_index + length(gps_points) - 1))
+            paths_files[start_index:(start_index + length(gps_points) - 1)] = tcx_file_path
+            next!(build_prog)
+        end
+    else
+        for (index, tcx_file_path) in enumerate(tcx_files)
+            gps_points = read_tcx_gps_points(tcx_file_path, add_features)
+
+            if isnothing(gps_points) || isempty(gps_points)
+                println("Skipping file: $tcx_file_path (No valid trackpoints).")
+                continue
+            end
+
+            start_index = nv(graph) + 1
+            for _ in 1:length(gps_points)
+                add_vertex!(graph)
+            end
+
+            for i in 1:(length(gps_points)-1)
+                add_edge!(graph, start_index + i - 1, start_index + i)
+            end
+
+            for (i, gps) in enumerate(gps_points)
+                vertex_index = start_index + i - 1
+                for (k, v) in gps
+                    try
+                        set_prop!(graph, vertex_index, Symbol(k), v)
+                    catch
+                        @warn "Failed to set property $k for vertex $vertex_index: $v"
+                    end
+                end
+                all_gps_data[vertex_index] = gps
+            end
+
+            push!(paths, start_index:(start_index + length(gps_points) - 1))
+            paths_files[start_index:(start_index + length(gps_points) - 1)] = tcx_file_path
+        end
     end
 
     return graph, all_gps_data, paths, paths_files

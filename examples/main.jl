@@ -45,7 +45,7 @@ function main()
     # --- Overlapping Segment Detection Parameters ---
     segment_max_length_m = 1000.0 # Max length of a candidate segment in meters
     segment_tolerance_m = 100.0   # Max Frechet distance for a segment to be considered an overlap
-    segment_min_runs = 90          # A segment must appear in at least this many rides to be detected
+    segment_min_runs = 100          # A segment must appear in at least this many rides to be detected
     prefilter_margin_m = 1.0    # Broad-phase filter for rides; only rides within this margin are checked
     dedup_overlap_frac = 0.1      # Deduplicate segments if they overlap by more than this fraction
 
@@ -131,7 +131,7 @@ function main()
         ref_ride_idx = ref_ride_idx,
         max_length_m = segment_max_length_m,
         tol_m = segment_tolerance_m,
-        window_step = 1,
+        window_step = 100,
         min_runs = segment_min_runs,
         prefilter_margin_m = prefilter_margin_m,
         dedup_overlap_frac = dedup_overlap_frac,

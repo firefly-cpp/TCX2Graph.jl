@@ -137,18 +137,21 @@ function find_best_ref_ride(
     for (p_idx, ride_range) in enumerate(paths)
         processed_cells_for_ride = Set{Tuple{Int,Int}}()
         for pt_idx in ride_range
-            tp = get(all_gps_data, pt_idx, nothing)
-            if tp === nothing || !haskey(tp, "latitude") || !haskey(tp, "longitude") continue end
-            lat, lon = tp["latitude"], tp["longitude"]
-            if ismissing(lat) || ismissing(lon) continue end
+            try
+                tp = all_gps_data[pt_idx]
+                lat, lon = tp["latitude"], tp["longitude"]
+                if ismissing(lat) || ismissing(lon) continue end
 
-            key = quantize_key(lat, lon)
-            if !(key in processed_cells_for_ride)
-                push!(get!(cell_to_rides, key, Set{Int}()), p_idx)
-                push!(processed_cells_for_ride, key)
+                key = quantize_key(lat, lon)
+                if !(key in processed_cells_for_ride)
+                    push!(get!(cell_to_rides, key, Set{Int}()), p_idx)
+                    push!(processed_cells_for_ride, key)
+                end
+            catch
+                continue
             end
-        end
-    end
+         end
+     end
 
     hot_cells = Set{Tuple{Int,Int}}()
     for (cell, rides) in cell_to_rides
@@ -164,18 +167,21 @@ function find_best_ref_ride(
 
     ride_scores = zeros(Int, length(paths))
     for (p_idx, ride_range) in enumerate(paths)
-        for pt_idx in ride_range
-            tp = get(all_gps_data, pt_idx, nothing)
-            if tp === nothing || !haskey(tp, "latitude") || !haskey(tp, "longitude") continue end
-            lat, lon = tp["latitude"], tp["longitude"]
-            if ismissing(lat) || ismissing(lon) continue end
+         for pt_idx in ride_range
+            try
+                tp = all_gps_data[pt_idx]
+                lat, lon = tp["latitude"], tp["longitude"]
+                if ismissing(lat) || ismissing(lon) continue end
 
-            key = quantize_key(lat, lon)
-            if key in hot_cells
-                ride_scores[p_idx] += 1
+                key = quantize_key(lat, lon)
+                if key in hot_cells
+                    ride_scores[p_idx] += 1
+                end
+            catch
+                continue
             end
-        end
-    end
+         end
+     end
 
     best_ref_idx = argmax(ride_scores)
     println("Best reference ride is index $best_ref_idx with a score of $(maximum(ride_scores)).")

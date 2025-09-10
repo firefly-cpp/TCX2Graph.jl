@@ -70,7 +70,9 @@ function find_most_repeated_segments()
             min_runs=MIN_REPETITIONS,
             window_step=10, # Use a larger step to speed up, can be 1 for full detail
             prefilter_margin_m=100.0,
-            dedup_overlap_frac=0.5
+            dedup_overlap_frac=0.5,
+            show_progress=true,
+            progress_dt_s=0.5
         )
         if !isempty(segments)
             # Add reference ride info to each segment
