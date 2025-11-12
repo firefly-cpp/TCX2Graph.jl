@@ -11,7 +11,8 @@ segment_end(seg) = last(seg["ref_range"])
         all_gps_data::Dict{Int, Dict{String, Any}};
         min_length::Int=3,
         min_runs::Int=2,
-        tolerance_m::Float64=50.0
+        tolerance_m::Float64=50.0,
+        adjacency::Union{Nothing, Vector{Vector{Int}}}=nothing
     ) -> Vector{Dict{String, Any}}
 
 Finds a directed path between two segments by connecting them head-to-tail. This version is direction-aware,
@@ -25,6 +26,8 @@ meaning it considers that segments can be traversed in a forward or reversed ori
 - `min_length::Int`: The minimum number of segments required in the resulting path.
 - `min_runs::Int`: The minimum number of paths in which each segment must appear to be considered.
 - `tolerance_m::Float64`: The maximum distance in **meters** allowed between segment endpoints for them to be considered connected.
+- `adjacency::Union{Nothing,Vector{Vector{Int}}}`: Optional pre-computed adjacency list (as returned by
+  [`build_segment_adjacency`](@ref)) that allows skipping recomputation.
 
 # Returns
 - `Vector{Dict{String, Any}}`: A vector of dictionaries, each representing a segment in the path. Each segment includes an added
@@ -40,7 +43,8 @@ function find_path_between_segments(
     all_gps_data::Dict{Int, Dict{String, Any}};
     min_length::Int=3,
     min_runs::Int=2,
-    tolerance_m::Float64=50.0
+    tolerance_m::Float64=50.0,
+    adjacency::Union{Nothing, Vector{Vector{Int}}}=nothing
 ) :: Vector{Dict{String, Any}}
 
     start_segment_index = findfirst(s -> s == start_segment, overlap_segments)
@@ -51,40 +55,46 @@ function find_path_between_segments(
 
     num_segments = length(overlap_segments)
 
-    endpoints = [
-        (
-            (all_gps_data[segment_start(s)]["latitude"], all_gps_data[segment_start(s)]["longitude"]),
-            (all_gps_data[segment_end(s)]["latitude"], all_gps_data[segment_end(s)]["longitude"])
-        ) for s in overlap_segments
-    ]
-
     node_to_seg_ori(n) = n > num_segments ? (n - num_segments, :reversed) : (n, :forward)
     seg_ori_to_node(s, o) = o == :forward ? s : s + num_segments
 
-    adj = [Int[] for _ in 1:(2*num_segments)]
+    adj = isnothing(adjacency) ? [Int[] for _ in 1:(2*num_segments)] : adjacency
 
-    for i in 1:num_segments
-        if length(overlap_segments[i]["run_ranges"]) < min_runs continue end
+    if length(adj) != 2 * num_segments
+        throw(ArgumentError("Provided adjacency has $(length(adj)) entries, but $(2*num_segments) were expected."))
+    end
 
-        for j in 1:num_segments
-            if i == j continue end
-            if length(overlap_segments[j]["run_ranges"]) < min_runs continue end
+    if isnothing(adjacency)
+        endpoints = [
+            (
+                (all_gps_data[segment_start(s)]["latitude"], all_gps_data[segment_start(s)]["longitude"]),
+                (all_gps_data[segment_end(s)]["latitude"], all_gps_data[segment_end(s)]["longitude"])
+            ) for s in overlap_segments
+        ]
 
-            start_i_coords, end_i_coords = endpoints[i]
-            start_j_coords, end_j_coords = endpoints[j]
+        for i in 1:num_segments
+            if length(overlap_segments[i]["run_ranges"]) < min_runs continue end
 
-            if haversine_distance(end_i_coords..., start_j_coords...) <= tolerance_m
-                push!(adj[seg_ori_to_node(i, :forward)], seg_ori_to_node(j, :forward))
-            end
-            if haversine_distance(end_i_coords..., end_j_coords...) <= tolerance_m
-                push!(adj[seg_ori_to_node(i, :forward)], seg_ori_to_node(j, :reversed))
-            end
+            for j in 1:num_segments
+                if i == j continue end
+                if length(overlap_segments[j]["run_ranges"]) < min_runs continue end
 
-            if haversine_distance(start_i_coords..., start_j_coords...) <= tolerance_m
-                push!(adj[seg_ori_to_node(i, :reversed)], seg_ori_to_node(j, :forward))
-            end
-            if haversine_distance(start_i_coords..., end_j_coords...) <= tolerance_m
-                push!(adj[seg_ori_to_node(i, :reversed)], seg_ori_to_node(j, :reversed))
+                start_i_coords, end_i_coords = endpoints[i]
+                start_j_coords, end_j_coords = endpoints[j]
+
+                if haversine_distance(end_i_coords..., start_j_coords...) <= tolerance_m
+                    push!(adj[seg_ori_to_node(i, :forward)], seg_ori_to_node(j, :forward))
+                end
+                if haversine_distance(end_i_coords..., end_j_coords...) <= tolerance_m
+                    push!(adj[seg_ori_to_node(i, :forward)], seg_ori_to_node(j, :reversed))
+                end
+
+                if haversine_distance(start_i_coords..., start_j_coords...) <= tolerance_m
+                    push!(adj[seg_ori_to_node(i, :reversed)], seg_ori_to_node(j, :forward))
+                end
+                if haversine_distance(start_i_coords..., end_j_coords...) <= tolerance_m
+                    push!(adj[seg_ori_to_node(i, :reversed)], seg_ori_to_node(j, :reversed))
+                end
             end
         end
     end
